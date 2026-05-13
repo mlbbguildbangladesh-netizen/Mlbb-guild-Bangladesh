@@ -1,0 +1,185 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    
+    function isMasterAdmin() {
+      return isSignedIn() && 
+             request.auth.token.email != null && 
+             request.auth.token.email.lower() == "mlbbguildbangladesh@gmail.com";
+    }
+
+    function isVerified() { 
+      return isSignedIn() && (
+        isMasterAdmin() ||
+        request.auth.token.email_verified == true ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isVerified', false) == true)
+      ); 
+    }
+
+    function isAdmin() { 
+      return isMasterAdmin() || (
+        isSignedIn() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin'
+      ); 
+    }
+
+    function isModerator(perm) {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/settings/global) &&
+             get(/databases/$(database)/documents/settings/global).data.get('moderatorPermissions', {}).get(request.auth.uid, []).hasAny([perm]);
+    }
+
+    function isStaff(perm) {
+      return isMasterAdmin() || isAdmin() || isModerator(perm);
+    }
+
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // --- Validation Blueprints ---
+    function isValidUser(data) {
+      return data.get('email', '') is string && 
+             data.get('role', 'team') in ['admin', 'team'];
+    }
+
+    function isValidTeam(data) {
+      return data.get('teamName', '') is string && 
+             data.get('leaderName', '') is string;
+    }
+
+    function isValidRegistration(data) {
+      return data.get('teamName', '') is string && 
+             data.get('leaderName', '') is string && 
+             data.get('leaderEmail', '') is string && 
+             (data.get('userId', '') == request.auth.uid || data.get('ownerId', '') == request.auth.uid) &&
+             data.get('status', 'pending') == 'pending';
+    }
+
+    // --- Rules ---
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isStaff('users') || isStaff('matches');
+      
+      allow create: if (
+        isOwner(userId) && 
+        isValidUser(incoming())
+      );
+
+      allow update: if (
+        isSignedIn() && (
+          isStaff('users') || isStaff('matches') || (
+            isOwner(userId) && 
+            incoming().get('role', existing().get('role', 'team')) == existing().get('role', 'team') &&
+            incoming().get('points', existing().get('points', 0)) == existing().get('points', 0) &&
+            incoming().get('diamonds', existing().get('diamonds', 0)) == existing().get('diamonds', 0)
+          )
+        )
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    match /teams/{teamId} {
+      allow read, list: if true;
+      
+      allow create: if isStaff('teams') || isStaff('registrations') || (isSignedIn() && isValidTeam(incoming()) && incoming().get('ownerId', '') == request.auth.uid); 
+      
+      allow update: if (
+        isSignedIn() && (
+          isStaff('teams') || isStaff('matches') || (
+            (isAdmin() || isOwner(existing().get('ownerId', '')) || isOwner(teamId)) &&
+            incoming().get('ownerId', existing().get('ownerId', '')) == existing().get('ownerId', '')
+          ) || (
+            // Support for batch increments of matchesThisSeason
+            incoming().diff(existing()).affectedKeys().hasOnly(['matchesThisSeason'])
+          )
+        )
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    match /registrations/{regId} {
+      allow create: if isSignedIn() && isValidRegistration(incoming());
+      allow get: if isStaff('registrations') || (isSignedIn() && (resource != null && (existing().get('ownerId', '') == request.auth.uid || existing().get('userId', '') == request.auth.uid)));
+      allow list: if isStaff('registrations') || (isSignedIn() && resource.data.get('ownerId', '') == request.auth.uid) || (isSignedIn() && resource.data.get('userId', '') == request.auth.uid);
+      allow write: if isStaff('registrations');
+    }
+
+    match /matches/{matchId} {
+      allow read, list: if true;
+      allow write: if isStaff('matches');
+    }
+
+    match /transactions/{transId} {
+      allow read: if isStaff('transactions') || isStaff('matches') || (isSignedIn() && resource != null && existing().get('teamId', '') == request.auth.uid);
+      allow list: if isStaff('transactions') || isStaff('matches') || (isSignedIn() && resource.data.get('teamId', '') == request.auth.uid);
+      allow write: if isStaff('transactions') || isStaff('matches');
+    }
+
+    match /challenges/{challengeId} {
+      allow read, list: if true;
+      allow create: if isSignedIn() && (incoming().get('fromTeamId', '') == request.auth.uid || (exists(/databases/$(database)/documents/teams/$(incoming().get('fromTeamId', ''))) && get(/databases/$(database)/documents/teams/$(incoming().get('fromTeamId', ''))).data.ownerId == request.auth.uid));
+      allow update, delete: if isAdmin() || (isSignedIn() && (
+        challengeId == request.auth.uid || 
+        (exists(/databases/$(database)/documents/teams/$(challengeId)) && get(/databases/$(database)/documents/teams/$(challengeId)).data.ownerId == request.auth.uid) ||
+        request.auth.uid in existing().get('targetTeamIds', [])
+      ));
+    }
+
+    match /schedules/{scheduleId} {
+      allow read, list: if true;
+      allow update, delete: if isStaff('schedules');
+      allow create: if isSignedIn() && (
+        isStaff('schedules') || 
+        incoming().get('matchType', '') == 'challenge'
+      );
+    }
+
+    match /seasons/{seasonId} {
+      allow read, list: if true;
+      allow write: if isStaff('seasons');
+    }
+
+    match /passwordRequests/{reqId} {
+      allow create: if true;
+      allow read, write: if isStaff('pass-reqs');
+    }
+
+    match /soloPlayers/{playerId} {
+      allow read, list: if true;
+      allow create: if isSignedIn() && (incoming().get('userId', '') == request.auth.uid || playerId == request.auth.uid);
+      allow update, delete: if isAdmin() || (isSignedIn() && (existing().get('userId', '') == request.auth.uid || playerId == request.auth.uid));
+    }
+
+    match /recruitmentRequests/{reqId} {
+      allow read, list: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn();
+    }
+
+    match /notifications/{notificationId} {
+      allow read, update: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn();
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    match /settings/{settingId} {
+      allow read, list: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

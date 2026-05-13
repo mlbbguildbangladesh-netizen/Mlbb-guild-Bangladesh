@@ -1,0 +1,256 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user with role-based access",
+      "type": "object",
+      "properties": {
+        "teamName": { "type": "string" },
+        "leaderName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "team"] },
+        "visiblePassword": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "Participating esports team",
+      "type": "object",
+      "properties": {
+        "teamName": { "type": "string" },
+        "leaderName": { "type": "string" },
+        "points": { "type": "number" },
+        "diamonds": { "type": "number" },
+        "streak": { "type": "number" },
+        "upgradeLevel": { "type": "number" },
+        "logoUrl": { "type": "string" },
+        "leaderCardUrl": { "type": "string" },
+        "players": { 
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "registrationStatus": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "uniqueId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["teamName", "leaderName", "points", "diamonds"]
+    },
+    "Match": {
+      "title": "Match",
+      "description": "Esports match record",
+      "type": "object",
+      "properties": {
+        "teamA": { "type": "string" },
+        "teamB": { "type": "string" },
+        "winnerId": { "type": "string" },
+        "resultType": { "type": "string", "enum": ["win", "loss", "walkout", "rematch"] },
+        "date": { "type": "string", "format": "date-time" },
+        "pointsExchanged": { "type": "number" },
+        "diamondsExchanged": { "type": "number" }
+      },
+      "required": ["teamA", "teamB", "date"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Log of points and diamonds changes",
+      "type": "object",
+      "properties": {
+        "teamId": { "type": "string" },
+        "type": { "type": "string", "enum": ["win", "loss", "bonus", "shop", "penalty"] },
+        "points": { "type": "number" },
+        "diamonds": { "type": "number" },
+        "reason": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["teamId", "type", "points", "diamonds", "timestamp"]
+    },
+    "Registration": {
+      "title": "Registration",
+      "description": "Team registration application",
+      "type": "object",
+      "properties": {
+        "teamName": { "type": "string" },
+        "leaderName": { "type": "string" },
+        "leaderEmail": { "type": "string", "format": "email" },
+        "players": { 
+          "type": "array", 
+          "items": { "type": "string" } 
+        },
+        "logoUrl": { "type": "string" },
+        "leaderCardUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "type": { "type": "string", "enum": ["new", "old"] },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["teamName", "leaderName", "leaderEmail", "timestamp"]
+    },
+    "Challenge": {
+      "title": "Challenge",
+      "description": "Team challenge selections for the challenge round",
+      "type": "object",
+      "properties": {
+        "fromTeamId": { "type": "string" },
+        "targetTeamIds": { 
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fromTeamId", "targetTeamIds", "timestamp"]
+    },
+    "ScheduleMatch": {
+      "title": "ScheduleMatch",
+      "description": "Upcoming or completed match schedule",
+      "type": "object",
+      "properties": {
+        "team1Id": { "type": "string" },
+        "team1Name": { "type": "string" },
+        "team2Id": { "type": "string" },
+        "team2Name": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "firstPick": { "type": "string" },
+        "status": { "type": "string", "enum": ["upcoming", "completed", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["team1Name", "team2Name", "date", "time", "firstPick", "status"]
+    },
+    "Season": {
+      "title": "Season",
+      "description": "Information about a tournament season",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["upcoming", "registration", "active", "completed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "status"]
+    },
+    "PasswordRequest": {
+      "title": "PasswordRequest",
+      "description": "User requested a password reset from admin",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "status", "createdAt"]
+    },
+    "SoloPlayer": {
+      "title": "SoloPlayer",
+      "description": "Profile for individual players seeking teams",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "gameId": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "fbLink": { "type": "string" },
+        "mainRole": { "type": "string" },
+        "subRoles": { 
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "activeTime": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "booked"] },
+        "rating": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "gameId", "whatsapp", "fbLink", "mainRole", "subRoles", "activeTime", "createdAt"]
+    },
+    "RecruitmentRequest": {
+      "title": "RecruitmentRequest",
+      "description": "Recruitment request between team and solo player",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["playerToTeam", "teamToPlayer"] },
+        "playerId": { "type": "string" },
+        "teamId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "playerId", "teamId", "status", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notifications",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["challenge", "recruitment", "system", "match"] },
+        "link": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "message", "type", "read", "createdAt"]
+    },
+    "AppSetting": {
+      "title": "AppSetting",
+      "description": "Global app settings",
+      "type": "object",
+      "properties": {
+        "challengePhaseLocked": { "type": "boolean" },
+        "allowOldTeamRegistration": { "type": "boolean" }
+      },
+      "required": ["challengePhaseLocked", "allowOldTeamRegistration"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and credentials"
+    },
+    "/teams/{teamId}": {
+      "schema": "Team",
+      "description": "Team data and stats"
+    },
+    "/matches/{matchId}": {
+      "schema": "Match",
+      "description": "Tournament match history"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Audit log for currency changes"
+    },
+    "/registrations/{regId}": {
+      "schema": "Registration",
+      "description": "Public team registration submissions"
+    },
+    "/challenges/{challengeId}": {
+      "schema": "Challenge",
+      "description": "Team challenge selections"
+    },
+    "/schedules/{scheduleId}": {
+      "schema": "ScheduleMatch",
+      "description": "Upcoming or completed match schedule"
+    },
+    "/seasons/{seasonId}": {
+      "schema": "Season",
+      "description": "Tournament seasons"
+    },
+    "/passwordRequests/{reqId}": {
+      "schema": "PasswordRequest",
+      "description": "Requests from users to admin to reset their password"
+    },
+    "/soloPlayers/{playerId}": {
+      "schema": "SoloPlayer",
+      "description": "Profiles for solo players"
+    },
+    "/recruitmentRequests/{reqId}": {
+      "schema": "RecruitmentRequest",
+      "description": "Recruitment requests"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications"
+    },
+    "/settings/{settingId}": {
+      "schema": "AppSetting",
+      "description": "Global application configuration"
+    }
+  }
+}

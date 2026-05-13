@@ -1,0 +1,14 @@
+{
+  "name": "MGB Official",
+  "description": "Professional Mobile Legends: Bang Bang tournament platform for MGB Bangladesh, featuring real-time leaderboards, team cards, and tournament management.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "real-time-database",
+    "authentication",
+    "file-upload",
+    "image-generation"
+  ]
+}
