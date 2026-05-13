@@ -157,6 +157,7 @@ export interface SoloPlayer {
   createdAt: any;
   status?: 'active' | 'booked'; // for hiring
   rating?: number;
+  verificationRequested?: boolean;
 }
 
 export interface Notification {

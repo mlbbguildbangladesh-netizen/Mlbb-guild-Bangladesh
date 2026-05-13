@@ -154,6 +154,29 @@ export default function SoloPlayers() {
     }
   };
 
+  const handleRequestAdminVerification = async () => {
+    if (!userSoloProfile || !user) return;
+    setIsSubmitting(true);
+    try {
+      await updateDoc(doc(db, 'soloPlayers', userSoloProfile.id), {
+        verificationRequested: true
+      });
+      await notifyAdmins(
+        'Solo Player Verification Request',
+        `Player "${userSoloProfile.name}" has requested admin verification to join teams.`,
+        'system',
+        '/admin',
+        settings
+      );
+      toast.success("Request sent to server administrators.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to send request.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleDeleteProfile = (id: string) => {
     setPlayerToDelete(id);
   };
@@ -889,9 +912,17 @@ export default function SoloPlayers() {
                               <AlertCircle size={12} />
                               <span className="text-[8px] font-black uppercase tracking-widest">JOINING RESTRICTED</span>
                             </div>
-                            <p className="text-[9px] font-bold text-gray-500 uppercase leading-relaxed">
+                            <p className="text-[9px] font-bold text-gray-500 uppercase leading-relaxed mb-3">
                               You need an admin rating to send join requests.
                             </p>
+                            <button
+                              type="button"
+                              onClick={handleRequestAdminVerification}
+                              disabled={userSoloProfile.verificationRequested || isSubmitting}
+                              className="w-full py-2 bg-neon-red/20 border border-neon-red/50 text-neon-red rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-neon-red hover:text-black transition-all disabled:opacity-50 disabled:hover:bg-neon-red/20 disabled:hover:text-neon-red"
+                            >
+                              {userSoloProfile.verificationRequested ? 'VERIFICATION PENDING' : 'REQUEST ADMIN VERIFICATION'}
+                            </button>
                           </div>
                         )}
                      </div>

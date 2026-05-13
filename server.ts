@@ -888,7 +888,7 @@ async function startServer() {
     const { url } = req.body;
     if (!url) return res.status(400).json({ error: "Missing url parameter" });
     try {
-      const resp = await fetch(url);
+      const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
       if (!resp.ok) throw new Error("Failed to fetch image");
       const arrayBuffer = await resp.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);

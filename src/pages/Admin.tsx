@@ -580,7 +580,14 @@ const Admin: React.FC = () => {
     try {
       let finalLogoUrl = manualTeam.logoUrl;
       if (finalLogoUrl) {
-         finalLogoUrl = await uploadExternalImageToStorage(finalLogoUrl, 'teams/logos');
+         try {
+           finalLogoUrl = await Promise.race([
+             uploadExternalImageToStorage(finalLogoUrl, 'teams/logos'),
+             new Promise<string>((resolve) => setTimeout(() => resolve(finalLogoUrl as string), 5000))
+           ]);
+         } catch(e) {
+           finalLogoUrl = manualTeam.logoUrl;
+         }
       }
 
       // --- UID Uniqueness Check ---
@@ -1229,7 +1236,14 @@ const Admin: React.FC = () => {
     try {
       let finalLogoUrl = editingUser.logoUrl || '';
       if (finalLogoUrl) {
-         finalLogoUrl = await uploadExternalImageToStorage(finalLogoUrl, 'users/logos');
+         try {
+           finalLogoUrl = await Promise.race([
+             uploadExternalImageToStorage(finalLogoUrl, 'users/logos'),
+             new Promise<string>((resolve) => setTimeout(() => resolve(finalLogoUrl), 5000))
+           ]);
+         } catch(e) {
+           finalLogoUrl = editingUser.logoUrl || '';
+         }
       }
 
       const userRef = doc(db, 'users', editingUser.id);
@@ -1352,7 +1366,14 @@ const Admin: React.FC = () => {
       
       let finalLogoUrl = editingTeam.logoUrl || '';
       if (finalLogoUrl) {
-         finalLogoUrl = await uploadExternalImageToStorage(finalLogoUrl, 'teams/logos');
+         try {
+           finalLogoUrl = await Promise.race([
+             uploadExternalImageToStorage(finalLogoUrl, 'teams/logos'),
+             new Promise<string>((resolve) => setTimeout(() => resolve(finalLogoUrl), 5000))
+           ]);
+         } catch(e) {
+           finalLogoUrl = editingTeam.logoUrl || '';
+         }
       }
 
       await updateDoc(teamRef, {
@@ -1497,7 +1518,7 @@ const Admin: React.FC = () => {
 
       <div className="flex flex-col lg:flex-row gap-8 items-start">
         {/* Navigation Sidebar */}
-        <div className="w-full lg:w-48 xl:w-56 flex-shrink-0 flex gap-2 lg:flex-col overflow-x-auto lg:overflow-visible pb-2 lg:pb-0 no-scrollbar px-4 lg:px-0 -mx-4 lg:mx-0 border-b lg:border-b-0 border-white/10 lg:sticky lg:top-4 z-10 bg-[#0a0a0a] lg:bg-transparent">
+        <div className="w-full lg:w-48 xl:w-56 flex-shrink-0 flex gap-2 lg:flex-col overflow-x-auto lg:overflow-y-auto pb-2 lg:pb-0 no-scrollbar px-4 lg:px-0 -mx-4 lg:mx-0 border-b lg:border-b-0 border-white/10 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] z-10 bg-[#0a0a0a] lg:bg-transparent">
           {[
             { id: 'registrations', icon: Shield, name: 'Regs' },
             { id: 'challenges', icon: Swords, name: 'Challenges' },
@@ -4048,7 +4069,7 @@ const Admin: React.FC = () => {
 
               <h2 className="text-2xl font-black italic">EDIT <span className="text-neon-blue">TEAM</span></h2>
               
-              <form onSubmit={handleUpdateTeam} className="space-y-4">
+              <form onSubmit={handleUpdateTeam} className="space-y-4 max-h-[70vh] overflow-y-auto no-scrollbar pr-2">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-500 uppercase">Team Name</label>
                   <input 
