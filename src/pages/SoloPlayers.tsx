@@ -54,6 +54,9 @@ export default function SoloPlayers() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [requests, setRequests] = useState<RecruitmentRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  const [playerToDelete, setPlayerToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'hire' | 'join' | 'all'>('hire');
 
@@ -151,13 +154,21 @@ export default function SoloPlayers() {
     }
   };
 
-  const handleDeleteProfile = async (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this profile?")) return;
+  const handleDeleteProfile = (id: string) => {
+    setPlayerToDelete(id);
+  };
+
+  const confirmDeleteProfile = async () => {
+    if (!playerToDelete) return;
+    setIsDeleting(true);
     try {
-      await deleteDoc(doc(db, 'soloPlayers', id));
-      toast.success("Profile deleted.");
+      await deleteDoc(doc(db, 'soloPlayers', playerToDelete));
+      toast.success("Profile Terminated.");
+      setPlayerToDelete(null);
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `soloPlayers/${id}`);
+      handleFirestoreError(err, OperationType.DELETE, `soloPlayers/${playerToDelete}`);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -1028,6 +1039,43 @@ export default function SoloPlayers() {
                </form>
              </motion.div>
           </div>
+        )}
+        
+        {playerToDelete && (
+           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+             <motion.div
+               initial={{ opacity: 0, scale: 0.95 }}
+               animate={{ opacity: 1, scale: 1 }}
+               exit={{ opacity: 0, scale: 0.95 }}
+               className="bg-[#0a0a0a] border border-neon-red/30 rounded-2xl p-6 max-w-sm w-full shadow-[0_0_50px_rgba(255,0,0,0.15)]"
+             >
+               <div className="flex flex-col items-center text-center space-y-4">
+                 <div className="w-16 h-16 rounded-full bg-neon-red/10 flex items-center justify-center text-neon-red border border-neon-red/20 mb-2">
+                   <AlertCircle size={32} />
+                 </div>
+                 <h3 className="text-xl font-black uppercase text-white tracking-widest">Terminate Profile</h3>
+                 <p className="text-sm text-gray-400">
+                   Are you absolute certain you wish to terminate this solo player profile? This action is irreversible.
+                 </p>
+                 <div className="flex w-full gap-3 pt-4">
+                   <button
+                     disabled={isDeleting}
+                     onClick={() => setPlayerToDelete(null)}
+                     className="flex-1 py-3 rounded-xl border border-white/10 text-white font-bold text-xs uppercase tracking-widest hover:bg-white/5 transition-all"
+                   >
+                     Cancel
+                   </button>
+                   <button
+                     disabled={isDeleting}
+                     onClick={confirmDeleteProfile}
+                     className="flex-1 py-3 rounded-xl bg-neon-red text-black font-black text-xs uppercase tracking-widest hover:brightness-110 shadow-[0_0_20px_rgba(255,0,0,0.3)] transition-all flex items-center justify-center"
+                   >
+                     {isDeleting ? <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" /> : 'Confirm'}
+                   </button>
+                 </div>
+               </div>
+             </motion.div>
+           </div>
         )}
       </AnimatePresence>
     </div>

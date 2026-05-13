@@ -358,11 +358,31 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             </div>
           </motion.div>
         ) : (
-          <main className="max-w-7xl mx-auto px-4 relative z-10 text-white">
+          <main className="max-w-7xl mx-auto px-4 relative z-10 text-white min-h-[calc(100vh-160px)]">
             {children}
           </main>
         )}
       </AnimatePresence>
+      
+      {/* Footer */}
+      <footer className="mt-auto py-6 relative z-10 border-t border-white/5 mt-12 bg-black/40 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
+            © {new Date().getFullYear()} MGB OFFICIAL. ALL RIGHTS RESERVED.
+          </div>
+          <div className="flex items-center gap-6">
+            <a 
+              href="/privacy-policy" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-[10px] text-gray-400 font-bold uppercase tracking-widest hover:text-neon-blue transition-colors flex items-center gap-2"
+            >
+              Privacy Policy
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+            </a>
+          </div>
+        </div>
+      </footer>
       
       {/* Background Elements */}
       <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none bg-[#02050a]">

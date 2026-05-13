@@ -1044,6 +1044,12 @@ const Registration: React.FC = () => {
           </motion.div>
         )}
 
+        <div className="text-center pb-2">
+          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+            By registering, you agree to our <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-neon-blue hover:underline">Privacy Policy</a>
+          </p>
+        </div>
+
         <button
           disabled={loading || compressing}
           type="submit"

@@ -21,6 +21,7 @@ import Challenges from './pages/Challenges';
 import Schedule from './pages/Schedule';
 import Profile from './pages/Profile';
 import SoloPlayers from './pages/SoloPlayers';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 
 const ProtectedRoute = ({ children, adminOnly = false }: { children: React.ReactNode, adminOnly?: boolean }) => {
   const { user, loading, isAdmin, isModerator } = useAuth();
@@ -75,6 +76,7 @@ export default function App() {
             <Route path="/shop" element={<Shop />} />
             <Route path="/solo-players" element={<SoloPlayers />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             
             {/* Protected Routes */}
             <Route path="/admin" element={
