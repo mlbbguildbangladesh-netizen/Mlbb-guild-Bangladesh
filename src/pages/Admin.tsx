@@ -16,7 +16,7 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { FALLBACK_IMAGE } from '../lib/utils';
+import { FALLBACK_IMAGE, uploadExternalImageToStorage } from '../lib/utils';
 import { ImageWithFallback } from '../components/ImageWithFallback';
 import { createNotification } from '../lib/notificationUtils';
 import { askGemini, SystemData } from '../services/geminiService';
@@ -578,6 +578,11 @@ const Admin: React.FC = () => {
     setProcessingId('manual-create');
     setManualErrorFields([]);
     try {
+      let finalLogoUrl = manualTeam.logoUrl;
+      if (finalLogoUrl) {
+         finalLogoUrl = await uploadExternalImageToStorage(finalLogoUrl, 'teams/logos');
+      }
+
       // --- UID Uniqueness Check ---
       const playersRaw = [manualTeam.player1, manualTeam.player2, manualTeam.player3, manualTeam.player4, manualTeam.player5];
       const playersList = playersRaw.filter(p => p.trim() !== '');
@@ -1222,6 +1227,11 @@ const Admin: React.FC = () => {
     if (!editingUser) return;
     setProcessingId(editingUser.id);
     try {
+      let finalLogoUrl = editingUser.logoUrl || '';
+      if (finalLogoUrl) {
+         finalLogoUrl = await uploadExternalImageToStorage(finalLogoUrl, 'users/logos');
+      }
+
       const userRef = doc(db, 'users', editingUser.id);
       
       const payload: any = {
@@ -1232,7 +1242,7 @@ const Admin: React.FC = () => {
         points: Number(editingUser.points || 0),
         diamonds: Number(editingUser.diamonds || 0),
         role: editingUser.role || 'team',
-        logoUrl: editingUser.logoUrl || '',
+        logoUrl: finalLogoUrl,
         phoneNumber: editingUser.phoneNumber || ''
       };
 
@@ -1339,6 +1349,11 @@ const Admin: React.FC = () => {
         }
       }
       // --- End Check ---
+      
+      let finalLogoUrl = editingTeam.logoUrl || '';
+      if (finalLogoUrl) {
+         finalLogoUrl = await uploadExternalImageToStorage(finalLogoUrl, 'teams/logos');
+      }
 
       await updateDoc(teamRef, {
         teamName: editingTeam.teamName,
@@ -1347,7 +1362,7 @@ const Admin: React.FC = () => {
         diamonds: Number(editingTeam.diamonds),
         upgradeLevel: Number(editingTeam.upgradeLevel),
         streak: Number(editingTeam.streak || 0),
-        logoUrl: editingTeam.logoUrl || '',
+        logoUrl: finalLogoUrl,
         phoneNumber: editingTeam.phoneNumber || '',
         players: players
       });
@@ -1377,7 +1392,7 @@ const Admin: React.FC = () => {
             teamName: editingTeam.teamName,
             leaderName: editingTeam.leaderName,
             displayName: editingTeam.leaderName,
-            logoUrl: editingTeam.logoUrl || '',
+            logoUrl: finalLogoUrl,
             points: Number(editingTeam.points),
             diamonds: Number(editingTeam.diamonds)
           });

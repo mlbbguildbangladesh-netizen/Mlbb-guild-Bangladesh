@@ -9,8 +9,42 @@ import {
   writeBatch,
   getDoc
 } from 'firebase/firestore';
-import { db, auth } from './firebase';
+import { db, auth, storage } from './firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { MatchResultType, Team, TransactionType } from '../types';
+
+export const uploadExternalImageToStorage = async (url: string, pathPrefix: string): Promise<string> => {
+  try {
+    if (!url || typeof url !== 'string') return url;
+    if (url.includes('firebasestorage.googleapis.com') || url.includes('googleusercontent.com')) return url;
+    
+    // Fetch via backend proxy to bypass CORS
+    const res = await fetch('/api/proxy-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    
+    if (!res.ok) throw new Error('Proxy failed to fetch image');
+    
+    let blob = await res.blob();
+    // For Discord images, some content types might be application/octet-stream, force it to image/jpeg if needed
+    if (blob.type === 'application/octet-stream') {
+        blob = new Blob([blob], { type: 'image/jpeg' });
+    }
+    
+    const safeName = url.split('/').pop()?.replace(/[^a-z0-9]/gi, '_').substring(0, 30) || 'ext_img';
+    const filePath = `${pathPrefix}/${Date.now()}_${safeName}`;
+    const storageRef = ref(storage, filePath);
+    
+    await uploadBytes(storageRef, blob);
+    const newUrl = await getDownloadURL(storageRef);
+    return newUrl;
+  } catch (error) {
+    console.warn("Failed to upload external image to storage, using original URL:", error);
+    return url;
+  }
+};
 
 export const RANKS = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS'];
 

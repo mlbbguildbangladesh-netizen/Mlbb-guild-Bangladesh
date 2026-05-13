@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { TeamCard } from '../components/TeamCard';
 import { ImageWithFallback } from '../components/ImageWithFallback';
-import { FALLBACK_IMAGE } from '../lib/utils';
+import { FALLBACK_IMAGE, uploadExternalImageToStorage } from '../lib/utils';
 import { createNotification, notifyAdmins } from '../lib/notificationUtils';
 import toast from 'react-hot-toast';
 
@@ -270,6 +270,15 @@ const Registration: React.FC = () => {
 
       let logoUrl = formData.logoUrl;
       let cardUrl = formData.cardUrl;
+      
+      // Attempt to proxy and upload external URLs to Firebase Storage
+      if (useLink.logo && logoUrl) {
+         logoUrl = await uploadExternalImageToStorage(logoUrl, 'registrations/logos');
+      }
+      if (useLink.card && cardUrl) {
+         cardUrl = await uploadExternalImageToStorage(cardUrl, 'registrations/cards');
+      }
+
       let finalCustomData = { ...customData };
 
       const uploadTasks: Promise<void>[] = [];

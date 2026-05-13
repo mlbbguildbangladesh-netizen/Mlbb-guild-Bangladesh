@@ -884,6 +884,23 @@ async function startServer() {
     }
   });
 
+  app.post("/api/proxy-image", async (req, res) => {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: "Missing url parameter" });
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error("Failed to fetch image");
+      const arrayBuffer = await resp.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const contentType = resp.headers.get("content-type") || "image/jpeg";
+      res.set("Content-Type", contentType);
+      res.send(buffer);
+    } catch (err: any) {
+      console.error("[ProxyImageError]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Catch-all for unmatched API routes
   app.use('/api/*', (req, res) => {
     res.status(404).json({ error: `API route not found: ${req.method} ${req.originalUrl}` });

@@ -9,7 +9,7 @@ import { motion } from 'framer-motion';
 import { Shield, User, Camera, Save, Loader2, AlertCircle, CheckCircle, Users, Mail, Send, RefreshCw, Lock } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { ImageWithFallback } from '../components/ImageWithFallback';
-import { FALLBACK_IMAGE, RANKS, getRankBonus } from '../lib/utils';
+import { FALLBACK_IMAGE, RANKS, getRankBonus, uploadExternalImageToStorage } from '../lib/utils';
 import { useSearchParams, Link } from 'react-router-dom';
 
 const Profile: React.FC = () => {
@@ -292,9 +292,14 @@ const Profile: React.FC = () => {
 
       if (files.logo) {
         logoUrl = await uploadFile(files.logo, `teams/${targetId}/logo_${Date.now()}`);
+      } else if (logoUrl && !files.logo) {
+        logoUrl = await uploadExternalImageToStorage(logoUrl, `teams/${targetId}/logos`);
       }
+      
       if (files.card) {
         leaderCardUrl = await uploadFile(files.card, `teams/${targetId}/card_${Date.now()}`);
+      } else if (leaderCardUrl && !files.card) {
+        leaderCardUrl = await uploadExternalImageToStorage(leaderCardUrl, `teams/${targetId}/cards`);
       }
 
       const batch = writeBatch(db);
