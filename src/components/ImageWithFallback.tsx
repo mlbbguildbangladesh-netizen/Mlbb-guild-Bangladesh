@@ -35,6 +35,7 @@ export const ImageWithFallback: React.FC<ImageWithFallbackProps> = ({
       alt={alt}
       className={className}
       onError={() => setHasError(true)}
+      referrerPolicy="no-referrer"
       {...props}
     />
   );

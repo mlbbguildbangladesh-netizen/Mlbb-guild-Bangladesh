@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, User, Shield, Users, Camera, CheckCircle2, Download, Trophy, AlertTriangle, Lock } from 'lucide-react';
+import { Upload, User, Shield, Users, Camera, CheckCircle2, Download, Trophy, AlertTriangle, Lock, AlertCircle } from 'lucide-react';
 import { collection, addDoc, serverTimestamp, doc, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -91,7 +91,7 @@ const Registration: React.FC = () => {
       const match2 = value.match(/id=([a-zA-Z0-9_-]+)/);
       const id = (match1 && match1[1]) ? match1[1] : (match2 && match2[1] ? match2[1] : null);
       if (id) {
-        value = `https://drive.google.com/uc?id=${id}&export=download`;
+        value = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
       }
     }
     setFormData({ ...formData, [e.target.name]: value });
@@ -883,22 +883,30 @@ const Registration: React.FC = () => {
                 </div>
                 
                 {useLink.logo ? (
-                  <div className="flex gap-4 items-center">
-                    <input
-                      required={logoField.required}
-                      type="url"
-                      name="logoUrl"
-                      value={formData.logoUrl}
-                      onChange={handleInputChange}
-                      placeholder={`Paste ${logoField.label} URL`}
-                      className="flex-1 bg-white/5 border border-white/10 rounded-lg py-3 px-4 focus:outline-none focus:border-neon-blue text-sm"
-                    />
-                    {formData.logoUrl && (
-                      <div className="w-12 h-12 rounded-lg bg-white/5 border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center">
-                        <ImageWithFallback src={formData.logoUrl} className="w-full h-full object-cover" />
+                  <>
+                    <div className="flex gap-4 items-center">
+                      <input
+                        required={logoField.required}
+                        type="url"
+                        name="logoUrl"
+                        value={formData.logoUrl}
+                        onChange={handleInputChange}
+                        placeholder={`Paste ${logoField.label} URL`}
+                        className="flex-1 bg-white/5 border border-white/10 rounded-lg py-3 px-4 focus:outline-none focus:border-neon-blue text-sm"
+                      />
+                      {formData.logoUrl && (
+                        <div className="w-12 h-12 rounded-lg bg-white/5 border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                          <ImageWithFallback src={formData.logoUrl} className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                    </div>
+                    {formData.logoUrl && formData.logoUrl.match(/(discord|fbcdn|fb)/i) && (
+                      <div className="text-xs text-yellow-500 flex items-center gap-1 mt-1">
+                        <AlertCircle size={12} />
+                        Warning: This link might expire after some time. Please consider uploading the file directly.
                       </div>
                     )}
-                  </div>
+                  </>
                 ) : (
                   <div 
                     className="relative h-40 border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center gap-3 group hover:border-neon-blue transition-all cursor-pointer overflow-hidden"
@@ -934,22 +942,30 @@ const Registration: React.FC = () => {
                 </div>
 
                 {useLink.card ? (
-                  <div className="flex gap-4 items-center">
-                    <input
-                      required={cardField.required}
-                      type="url"
-                      name="cardUrl"
-                      value={formData.cardUrl}
-                      onChange={handleInputChange}
-                      placeholder={`Paste ${cardField.label} URL`}
-                      className="flex-1 bg-white/5 border border-white/10 rounded-lg py-3 px-4 focus:outline-none focus:border-neon-red text-sm"
-                    />
-                    {formData.cardUrl && (
-                      <div className="w-12 h-12 rounded-lg bg-white/5 border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center">
-                        <ImageWithFallback src={formData.cardUrl} className="w-full h-full object-cover" />
+                  <>
+                    <div className="flex gap-4 items-center">
+                      <input
+                        required={cardField.required}
+                        type="url"
+                        name="cardUrl"
+                        value={formData.cardUrl}
+                        onChange={handleInputChange}
+                        placeholder={`Paste ${cardField.label} URL`}
+                        className="flex-1 bg-white/5 border border-white/10 rounded-lg py-3 px-4 focus:outline-none focus:border-neon-red text-sm"
+                      />
+                      {formData.cardUrl && (
+                        <div className="w-12 h-12 rounded-lg bg-white/5 border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                          <ImageWithFallback src={formData.cardUrl} className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                    </div>
+                    {formData.cardUrl && formData.cardUrl.match(/(discord|fbcdn|fb)/i) && (
+                      <div className="text-xs text-yellow-500 flex items-center gap-1 mt-1">
+                        <AlertCircle size={12} />
+                        Warning: This link might expire after some time. Please consider uploading the file directly.
                       </div>
                     )}
-                  </div>
+                  </>
                 ) : (
                   <div 
                     className="relative h-40 border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center gap-3 group hover:border-neon-red transition-all cursor-pointer overflow-hidden"

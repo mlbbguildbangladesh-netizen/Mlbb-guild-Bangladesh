@@ -1,6 +1,19 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let aiClient: GoogleGenAI | null = null;
+function getGeminiClient() {
+  if (!aiClient) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      console.warn("GEMINI_API_KEY is not defined.");
+      // Return a dummy client or throw, but since this might run, we just init with empty string to avoid crash, but it will fail on request.
+      aiClient = new GoogleGenAI({ apiKey: key || 'dummy' });
+    } else {
+      aiClient = new GoogleGenAI({ apiKey: key });
+    }
+  }
+  return aiClient;
+}
 
 export interface SystemData {
   teamsCount: number;
@@ -48,7 +61,7 @@ export async function askGemini(prompt: string, context: SystemData, history: an
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await getGeminiClient().models.generateContent({
       model: "gemini-3-flash-preview",
       contents: history.length > 0 ? history.concat([{ role: 'user', parts: [{ text: prompt }] }]) : [{ role: 'user', parts: [{ text: prompt }] }],
       config: {

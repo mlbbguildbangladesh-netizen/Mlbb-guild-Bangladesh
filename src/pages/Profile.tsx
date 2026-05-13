@@ -147,7 +147,7 @@ const Profile: React.FC = () => {
       const match2 = value.match(/id=([a-zA-Z0-9_-]+)/);
       const id = (match1 && match1[1]) ? match1[1] : (match2 && match2[1] ? match2[1] : null);
       if (id) {
-        value = `https://drive.google.com/uc?id=${id}&export=download`;
+        value = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
       }
     }
     setFormData({ ...formData, [e.target.name]: value });
@@ -793,6 +793,12 @@ const Profile: React.FC = () => {
                       placeholder="URL"
                       className="w-full bg-black/40 border border-white/5 rounded py-2 px-3 focus:outline-none focus:border-neon-blue transition-all text-xs"
                     />
+                    {formData.logoUrl && formData.logoUrl.match(/(discord|fbcdn|fb)/i) && (
+                      <div className="text-[10px] text-yellow-500 flex items-center gap-1 mt-1 text-left leading-tight">
+                        <AlertCircle size={10} className="shrink-0" />
+                        Link might expire. Please upload directly.
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -821,6 +827,12 @@ const Profile: React.FC = () => {
                     placeholder="URL"
                     className="w-full bg-black/40 border border-white/5 rounded py-2 px-3 focus:outline-none focus:border-neon-blue transition-all text-xs"
                   />
+                  {formData.leaderCardUrl && formData.leaderCardUrl.match(/(discord|fbcdn|fb)/i) && (
+                    <div className="text-[10px] text-yellow-500 flex items-center gap-1 mt-1 text-left leading-tight">
+                      <AlertCircle size={10} className="shrink-0" />
+                      Link might expire. Please upload directly.
+                    </div>
+                  )}
                 </div>
               </div>
             </fieldset>

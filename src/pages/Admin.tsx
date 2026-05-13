@@ -1783,7 +1783,7 @@ const Admin: React.FC = () => {
                       const match2 = value.match(/id=([a-zA-Z0-9_-]+)/);
                       const id = (match1 && match1[1]) ? match1[1] : (match2 && match2[1] ? match2[1] : null);
                       if (id) {
-                        value = `https://drive.google.com/uc?id=${id}&export=download`;
+                        value = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
                       }
                     }
                     setManualTeam({...manualTeam, logoUrl: value})
@@ -3978,7 +3978,7 @@ const Admin: React.FC = () => {
                         const match2 = value.match(/id=([a-zA-Z0-9_-]+)/);
                         const id = (match1 && match1[1]) ? match1[1] : (match2 && match2[1] ? match2[1] : null);
                         if (id) {
-                          value = `https://drive.google.com/uc?id=${id}&export=download`;
+                          value = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
                         }
                       }
                       setEditingUser({...editingUser, logoUrl: value})
@@ -4136,7 +4136,7 @@ const Admin: React.FC = () => {
                         const match2 = value.match(/id=([a-zA-Z0-9_-]+)/);
                         const id = (match1 && match1[1]) ? match1[1] : (match2 && match2[1] ? match2[1] : null);
                         if (id) {
-                          value = `https://drive.google.com/uc?id=${id}&export=download`;
+                          value = `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
                         }
                       }
                       setEditingTeam({...editingTeam, logoUrl: value})
