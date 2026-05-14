@@ -23,7 +23,7 @@ const DEFAULT_FIELDS: FormFieldSetting[] = [
 ];
 
 const Registration: React.FC = () => {
-  const { user, firebaseUser, isAdmin, loading: authLoading } = useAuth();
+  const { user, firebaseUser, isAdmin, isModerator, loading: authLoading } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState<AppSetting | null>(null);
@@ -36,7 +36,7 @@ const Registration: React.FC = () => {
     leaderName: '',
     leaderEmail: '',
     phoneNumber: '',
-    players: ['', '', '', '', ''],
+    players: ['', '', '', '', '', '', ''],
     type: 'new' as 'new' | 'old',
     logoUrl: '',
     cardUrl: ''
@@ -226,25 +226,27 @@ const Registration: React.FC = () => {
           return;
         }
 
-        // 2. Check pending registrations
-        const regQuery = query(
-          collection(db, 'registrations'), 
-          where('status', '==', 'pending'),
-          where('players', 'array-contains-any', playerIdsToCheck)
-        );
-        const regSnapshot = await getDocs(regQuery);
-        
-        if (!regSnapshot.empty) {
-          const conflictingRegData = regSnapshot.docs[0].data();
-          const teamName = conflictingRegData.teamName;
-          const matchedUid = playerIdsToCheck.find(uid => (conflictingRegData.players as string[]).includes(uid));
+        // 2. Check pending registrations (ONLY for staff to avoid permission leaks for regular users)
+        if (isAdmin || isModerator) {
+          const regQuery = query(
+            collection(db, 'registrations'), 
+            where('status', '==', 'pending'),
+            where('players', 'array-contains-any', playerIdsToCheck)
+          );
+          const regSnapshot = await getDocs(regQuery);
           
-          const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
-          if (conflictIdx !== -1) setErrorFields([conflictIdx]);
-
-          setError(`Player UID ${matchedUid} is already in a pending registration for team "${teamName}".`);
-          setLoading(false);
-          return;
+          if (!regSnapshot.empty) {
+            const conflictingRegData = regSnapshot.docs[0].data();
+            const teamName = conflictingRegData.teamName;
+            const matchedUid = playerIdsToCheck.find(uid => (conflictingRegData.players as string[]).includes(uid));
+            
+            const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
+            if (conflictIdx !== -1) setErrorFields([conflictIdx]);
+  
+            setError(`Player UID ${matchedUid} is already in a pending registration for team "${teamName}".`);
+            setLoading(false);
+            return;
+          }
         }
       }
       // --- End UID Uniqueness Check ---
@@ -617,7 +619,7 @@ const Registration: React.FC = () => {
                   teamName: '',
                   leaderName: '',
                   leaderEmail: '',
-                  players: ['', '', '', '', ''],
+                  players: ['', '', '', '', '', '', ''],
                   type: 'new',
                   logoUrl: '',
                   cardUrl: ''
@@ -851,7 +853,7 @@ const Registration: React.FC = () => {
           <div className="space-y-4">
             <label className="text-xs font-black uppercase text-gray-500 flex items-center gap-2">
               <Users size={14} className="text-neon-blue" />
-              Players (5 Members)
+              Players (7 Members)
             </label>
             <div className="grid gap-3">
               {formData.players.map((p, i) => (

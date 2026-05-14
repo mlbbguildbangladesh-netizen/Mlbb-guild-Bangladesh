@@ -65,7 +65,7 @@ const Teams: React.FC = () => {
 
       {loading ? (
         <div className="space-y-4">
-          {[1,2,3,4,5].map(i => (
+          {[1,2,3,4,5,6,7].map(i => (
             <div key={i} className="h-24 bg-white/5 animate-pulse rounded-2xl" />
           ))}
         </div>

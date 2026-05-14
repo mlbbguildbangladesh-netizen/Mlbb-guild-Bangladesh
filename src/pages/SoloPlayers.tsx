@@ -30,6 +30,7 @@ import {
   deleteDoc, 
   updateDoc,
   writeBatch,
+  runTransaction,
   query, 
   orderBy, 
   serverTimestamp 
@@ -71,9 +72,9 @@ export default function SoloPlayers() {
     if (isAdmin || isModerator) return true;
     if (!user) return false;
     
-    // Check if user is a team leader with available recruitment slots
+    // Check if user is a team leader
     const myTeam = teams.find(t => t.ownerId === user.id);
-    if (myTeam && (myTeam.recruitmentSlots || 0) > 0) return true;
+    if (myTeam) return true;
 
     // Check global authorized recruiters list
     if (settings?.authorizedRecruiters?.includes(user.id)) return true;
@@ -165,7 +166,7 @@ export default function SoloPlayers() {
         'Solo Player Verification Request',
         `Player "${userSoloProfile.name}" has requested admin verification to join teams.`,
         'system',
-        '/admin',
+        '/solo-players',
         settings
       );
       toast.success("Request sent to server administrators.");
@@ -174,6 +175,23 @@ export default function SoloPlayers() {
       toast.error("Failed to send request.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleApprovePlayer = async (id: string, playerId: string) => {
+    try {
+      await updateDoc(doc(db, 'soloPlayers', id), { rating: 1, verificationRequested: false });
+      await createNotification(
+        playerId,
+        'Verification Approved',
+        'Your player profile has been verified! You can now send join requests.',
+        'system',
+        '/solo-players?tab=join'
+      );
+      toast.success("Player approved and rated.");
+    } catch(err) {
+      console.error(err);
+      toast.error("Failed to approve player.");
     }
   };
 
@@ -268,15 +286,31 @@ export default function SoloPlayers() {
     if (!player) return;
 
     try {
-      const res = await fetch('/api/recruitment/assign-slot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reqId: req.id, slotIndex })
+      await runTransaction(db, async (transaction) => {
+        const teamRef = doc(db, 'teams', team.id);
+        const reqRef = doc(db, 'recruitmentRequests', req.id);
+        const playerRef = doc(db, 'soloPlayers', player.id);
+
+        const teamSnap = await transaction.get(teamRef);
+        if (!teamSnap.exists()) throw new Error("Team not found");
+        
+        const teamData = teamSnap.data();
+        const slots = teamData.recruitmentSlots || 0;
+
+        let newPlayers = [...(teamData.players || [])];
+        while (newPlayers.length <= slotIndex) {
+          newPlayers.push('');
+        }
+        newPlayers[slotIndex] = player.gameId;
+
+        transaction.update(teamRef, {
+          players: newPlayers,
+          recruitmentSlots: Math.max(0, slots - 1)
+        });
+
+        transaction.update(reqRef, { status: 'accepted' });
+        transaction.update(playerRef, { status: 'booked' });
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to assign player");
-      }
 
       await createNotification(
         player.userId,
@@ -291,7 +325,7 @@ export default function SoloPlayers() {
       setPendingAcceptReq(null);
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || "Failed to assign player.");
+      toast.error(err.message || "Failed to assign player");
     }
   };
 
@@ -315,15 +349,39 @@ export default function SoloPlayers() {
           // Direct acceptance (e.g. player accepting hire offer)
           if (req.type === 'teamToPlayer' && player.userId === user?.id) {
             try {
-              const res = await fetch('/api/recruitment/accept', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reqId, playerId: player.userId })
+              await runTransaction(db, async (transaction) => {
+                const teamRef = doc(db, 'teams', team.id);
+                const reqRef = doc(db, 'recruitmentRequests', req.id);
+                const playerRef = doc(db, 'soloPlayers', player.id);
+
+                const teamSnap = await transaction.get(teamRef);
+                if (!teamSnap.exists()) throw new Error("Team not found");
+                
+                const teamData = teamSnap.data();
+                const slots = teamData.recruitmentSlots || 0;
+
+                let newPlayers = [...(teamData.players || [])];
+                const emptyIndex = newPlayers.findIndex((p: any) => p === '');
+                if (emptyIndex !== -1) {
+                  newPlayers[emptyIndex] = player.gameId;
+                } else {
+                  if (newPlayers.length < 10) {
+                    newPlayers.push(player.gameId);
+                  } else {
+                    throw new Error("Team roster is full.");
+                  }
+                }
+
+                transaction.update(teamRef, {
+                  players: newPlayers,
+                  recruitmentSlots: Math.max(0, slots - 1)
+                });
+
+                transaction.update(reqRef, { status: 'accepted' });
+                transaction.update(playerRef, { status: 'booked' });
               });
-              const data = await res.json();
-              if (!res.ok) throw new Error(data.error || 'Failed to accept offer');
             } catch (err: any) {
-              toast.error(err.message);
+              toast.error(err.message || 'Failed to accept offer');
               return;
             }
           }
@@ -633,6 +691,14 @@ export default function SoloPlayers() {
                             </button>
                           ))}
                         </div>
+                      )}
+                      {(isAdmin || isModerator) && player.verificationRequested && (
+                        <button
+                          onClick={() => handleApprovePlayer(player.id, player.userId)}
+                          className="px-3 py-1 bg-neon-green/20 border border-neon-green/50 text-neon-green hover:bg-neon-green hover:text-black rounded text-[9px] font-black uppercase tracking-widest transition-all"
+                        >
+                          Approve Join Req
+                        </button>
                       )}
                       {(isAdmin || isModerator || player.userId === user?.id) && (
                         <button 

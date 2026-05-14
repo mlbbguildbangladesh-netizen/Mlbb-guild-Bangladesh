@@ -37,7 +37,7 @@ const Profile: React.FC = () => {
     leaderCardUrl: '',
     gameId: '',
     serverId: '',
-    players: ['', '', '', '', '']
+    players: ['', '', '', '', '', '', '']
   });
 
   const [files, setFiles] = useState<{ logo?: File, card?: File }>({});
@@ -117,7 +117,7 @@ const Profile: React.FC = () => {
             leaderCardUrl: teamData.leaderCardUrl || '',
             gameId: teamData.gameId || '',
             serverId: teamData.serverId || '',
-            players: teamData.players.length >= 5 ? teamData.players : [...teamData.players, ...Array(5 - teamData.players.length).fill('')]
+            players: teamData.players.length >= 7 ? teamData.players.slice(0, 7) : [...teamData.players, ...Array(7 - teamData.players.length).fill('')]
           });
         } else if (userSnap.exists()) {
           // Team doesn't exist, but we have user data (maybe they want to update their number before creating a team)
@@ -249,7 +249,7 @@ const Profile: React.FC = () => {
         const teamsSnapshot = await getDocs(teamsQuery);
         
         // Filter out current team if it's in the results
-        const conflict = teamsSnapshot.docs.find(d => d.id !== targetId);
+        const conflict = teamsSnapshot.docs.find(d => (team ? d.id !== team.id : d.id !== targetId));
         
         if (conflict) {
           const conflictingTeamData = conflict.data();
@@ -772,41 +772,41 @@ const Profile: React.FC = () => {
               ASSETS
             </h3>
 
-            <fieldset disabled={isLocked} className={`grid ${(!isAdmin && settings?.allowProfileLogoEdit === false) ? 'grid-cols-1' : 'grid-cols-2'} gap-4 disabled:opacity-50 group-disabled`}>
-              {(isAdmin || settings?.allowProfileLogoEdit !== false) && (
-                <div className="space-y-4 text-center">
-                  <div className="relative group mx-auto w-24 h-24 rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
-                    {(previews.logo || formData.logoUrl) ? (
-                      <ImageWithFallback src={previews.logo || formData.logoUrl} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white/20">
-                        <Shield size={32} />
-                      </div>
-                    )}
+            <fieldset disabled={isLocked} className="grid grid-cols-1 sm:grid-cols-2 gap-4 disabled:opacity-50 group-disabled">
+              <div className="space-y-4 text-center">
+                <div className="relative group mx-auto w-24 h-24 rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
+                  {(previews.logo || formData.logoUrl) ? (
+                    <ImageWithFallback src={previews.logo || formData.logoUrl} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-white/20">
+                      <Shield size={32} />
+                    </div>
+                  )}
+                  {isAdmin && (
                     <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity">
                       <Camera className="text-white" />
                       <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, 'logo')} />
                     </label>
-                  </div>
-                  <div className="flex flex-col gap-2 relative z-10 w-full px-4">
-                    <span className="text-[8px] font-black uppercase text-gray-500 text-center">TEAM LOGO</span>
-                    <input
-                      type="url"
-                      name="logoUrl"
-                      value={formData.logoUrl}
-                      onChange={handleInputChange}
-                      placeholder="URL"
-                      className="w-full bg-black/40 border border-white/5 rounded py-2 px-3 focus:outline-none focus:border-neon-blue transition-all text-xs"
-                    />
-                    {formData.logoUrl && formData.logoUrl.match(/(discord|fbcdn|fb)/i) && (
-                      <div className="text-[10px] text-yellow-500 flex items-center gap-1 mt-1 text-left leading-tight">
-                        <AlertCircle size={10} className="shrink-0" />
-                        Link might expire. Please upload directly.
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
-              )}
+                <div className="flex flex-col gap-2 relative z-10 w-full px-4">
+                  <span className="text-[8px] font-black uppercase text-gray-500 text-center">TEAM LOGO</span>
+                  <input
+                    type="url"
+                    name="logoUrl"
+                    value={formData.logoUrl}
+                    onChange={handleInputChange}
+                    placeholder="URL"
+                    className="w-full bg-black/40 border border-white/5 rounded py-2 px-3 focus:outline-none focus:border-neon-blue transition-all text-xs"
+                  />
+                  {isAdmin && formData.logoUrl && formData.logoUrl.match(/(discord|fbcdn|fb)/i) && (
+                    <div className="text-[10px] text-yellow-500 flex items-center gap-1 mt-1 text-left leading-tight">
+                      <AlertCircle size={10} className="shrink-0" />
+                      Link might expire. Please upload directly.
+                    </div>
+                  )}
+                </div>
+              </div>
 
               <div className="space-y-4 text-center">
                 <div className="relative group mx-auto w-24 h-24 rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
@@ -817,10 +817,12 @@ const Profile: React.FC = () => {
                       <User size={32} />
                     </div>
                   )}
-                  <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity">
-                    <Camera className="text-white" />
-                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, 'card')} />
-                  </label>
+                  {isAdmin && (
+                    <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity">
+                      <Camera className="text-white" />
+                      <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileChange(e, 'card')} />
+                    </label>
+                  )}
                 </div>
                 <div className="flex flex-col gap-2 relative z-10 w-full px-4">
                   <span className="text-[8px] font-black uppercase text-gray-500 text-center">LEADER CARD</span>
@@ -832,7 +834,7 @@ const Profile: React.FC = () => {
                     placeholder="URL"
                     className="w-full bg-black/40 border border-white/5 rounded py-2 px-3 focus:outline-none focus:border-neon-blue transition-all text-xs"
                   />
-                  {formData.leaderCardUrl && formData.leaderCardUrl.match(/(discord|fbcdn|fb)/i) && (
+                  {isAdmin && formData.leaderCardUrl && formData.leaderCardUrl.match(/(discord|fbcdn|fb)/i) && (
                     <div className="text-[10px] text-yellow-500 flex items-center gap-1 mt-1 text-left leading-tight">
                       <AlertCircle size={10} className="shrink-0" />
                       Link might expire. Please upload directly.

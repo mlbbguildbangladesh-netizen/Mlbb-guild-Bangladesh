@@ -50,21 +50,26 @@ service cloud.firestore {
 
     // --- Validation Blueprints ---
     function isValidUser(data) {
-      return data.get('email', '') is string && 
-             data.get('role', 'team') in ['admin', 'team'];
+      return data.email is string && data.email.size() <= 128 &&
+             data.get('role', 'team') in ['admin', 'team'] &&
+             data.get('points', 0) is number &&
+             data.get('diamonds', 0) is number;
     }
 
     function isValidTeam(data) {
-      return data.get('teamName', '') is string && 
-             data.get('leaderName', '') is string;
+      return data.teamName is string && data.teamName.size() <= 64 &&
+             data.leaderName is string && data.leaderName.size() <= 64 &&
+             data.players is list && data.players.size() <= 7 &&
+             data.ownerId is string && data.ownerId.size() <= 128;
     }
 
     function isValidRegistration(data) {
-      return data.get('teamName', '') is string && 
-             data.get('leaderName', '') is string && 
-             data.get('leaderEmail', '') is string && 
+      return data.teamName is string && data.teamName.size() <= 64 &&
+             data.leaderName is string && data.leaderName.size() <= 64 &&
+             data.leaderEmail is string && data.leaderEmail.size() <= 128 &&
              (data.get('userId', '') == request.auth.uid || data.get('ownerId', '') == request.auth.uid) &&
-             data.get('status', 'pending') == 'pending';
+             data.status == 'pending' &&
+             data.players is list && data.players.size() <= 7;
     }
 
     // --- Rules ---
@@ -73,6 +78,7 @@ service cloud.firestore {
       allow read: if isOwner(userId) || isStaff('users') || isStaff('matches');
       
       allow create: if (
+        isValidId(userId) &&
         isOwner(userId) && 
         isValidUser(incoming())
       );
@@ -81,7 +87,7 @@ service cloud.firestore {
         isSignedIn() && (
           isStaff('users') || isStaff('matches') || (
             isOwner(userId) && 
-            incoming().get('role', existing().get('role', 'team')) == existing().get('role', 'team') &&
+            incoming().get('role', existing().role) == existing().role &&
             incoming().get('points', existing().get('points', 0)) == existing().get('points', 0) &&
             incoming().get('diamonds', existing().get('diamonds', 0)) == existing().get('diamonds', 0)
           )
@@ -94,16 +100,17 @@ service cloud.firestore {
     match /teams/{teamId} {
       allow read, list: if true;
       
-      allow create: if isStaff('teams') || isStaff('registrations') || (isSignedIn() && isValidTeam(incoming()) && incoming().get('ownerId', '') == request.auth.uid); 
+      allow create: if isValidId(teamId) && (isStaff('teams') || isStaff('registrations') || (isSignedIn() && isValidTeam(incoming()) && incoming().ownerId == request.auth.uid)); 
       
       allow update: if (
         isSignedIn() && (
           isStaff('teams') || isStaff('matches') || (
-            (isAdmin() || isOwner(existing().get('ownerId', '')) || isOwner(teamId)) &&
+            (isOwner(existing().get('ownerId', '')) || isOwner(teamId)) &&
             incoming().get('ownerId', existing().get('ownerId', '')) == existing().get('ownerId', '')
           ) || (
-            // Support for batch increments of matchesThisSeason
-            incoming().diff(existing()).affectedKeys().hasOnly(['matchesThisSeason'])
+            // Support for batch increments of matchesThisSeason or player recruitment
+            incoming().diff(existing()).affectedKeys().hasOnly(['matchesThisSeason']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['players', 'recruitmentSlots'])
           )
         )
       );
@@ -112,9 +119,9 @@ service cloud.firestore {
     }
 
     match /registrations/{regId} {
-      allow create: if isSignedIn() && isValidRegistration(incoming());
+      allow create: if isValidId(regId) && isSignedIn() && isValidRegistration(incoming());
       allow get: if isStaff('registrations') || (isSignedIn() && (resource != null && (existing().get('ownerId', '') == request.auth.uid || existing().get('userId', '') == request.auth.uid)));
-      allow list: if isStaff('registrations') || (isSignedIn() && resource.data.get('ownerId', '') == request.auth.uid) || (isSignedIn() && resource.data.get('userId', '') == request.auth.uid);
+      allow list: if isStaff('registrations') || (isSignedIn() && (resource.data.get('ownerId', '') == request.auth.uid || resource.data.get('userId', '') == request.auth.uid));
       allow write: if isStaff('registrations');
     }
 
@@ -161,7 +168,11 @@ service cloud.firestore {
     match /soloPlayers/{playerId} {
       allow read, list: if true;
       allow create: if isSignedIn() && (incoming().get('userId', '') == request.auth.uid || playerId == request.auth.uid);
-      allow update, delete: if isAdmin() || (isSignedIn() && (existing().get('userId', '') == request.auth.uid || playerId == request.auth.uid));
+      allow update: if isAdmin() || (isSignedIn() && (
+        (existing().get('userId', '') == request.auth.uid || playerId == request.auth.uid) ||
+        (incoming().diff(existing()).affectedKeys().hasOnly(['status']))
+      ));
+      allow delete: if isAdmin() || (isSignedIn() && (existing().get('userId', '') == request.auth.uid || playerId == request.auth.uid));
     }
 
     match /recruitmentRequests/{reqId} {

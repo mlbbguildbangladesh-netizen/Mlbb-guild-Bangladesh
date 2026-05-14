@@ -227,6 +227,8 @@ const Admin: React.FC = () => {
     player3: '',
     player4: '',
     player5: '',
+    player6: '',
+    player7: '',
     logoUrl: ''
   });
 
@@ -591,7 +593,7 @@ const Admin: React.FC = () => {
       }
 
       // --- UID Uniqueness Check ---
-      const playersRaw = [manualTeam.player1, manualTeam.player2, manualTeam.player3, manualTeam.player4, manualTeam.player5];
+      const playersRaw = [manualTeam.player1, manualTeam.player2, manualTeam.player3, manualTeam.player4, manualTeam.player5, manualTeam.player6 || '', manualTeam.player7 || ''];
       const playersList = playersRaw.filter(p => p.trim() !== '');
       
       // Internal duplicates check
@@ -671,7 +673,7 @@ const Admin: React.FC = () => {
           teamName: manualTeam.teamName,
           leaderName: manualTeam.leaderName,
           logoUrl: manualTeam.logoUrl,
-          players: [manualTeam.player1, manualTeam.player2, manualTeam.player3, manualTeam.player4, manualTeam.player5].filter(p => p.trim() !== '')
+          players: [manualTeam.player1, manualTeam.player2, manualTeam.player3, manualTeam.player4, manualTeam.player5, manualTeam.player6, manualTeam.player7].filter(p => p && p.trim() !== '')
         })
       });
 
@@ -689,7 +691,7 @@ const Admin: React.FC = () => {
       
       setManualTeam({
         teamName: '', leaderName: '', leaderEmail: '', password: '',
-        player1: '', player2: '', player3: '', player4: '', player5: '',
+        player1: '', player2: '', player3: '', player4: '', player5: '', player6: '', player7: '',
         logoUrl: ''
       });
       setShowManualAdd(false);
@@ -1825,8 +1827,8 @@ const Admin: React.FC = () => {
                     setManualTeam({...manualTeam, logoUrl: value})
                   }} />
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                  {[1, 2, 3, 4, 5].map((num, idx) => (
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+                  {[1, 2, 3, 4, 5, 6, 7].map((num, idx) => (
                     <input 
                       key={num}
                       placeholder={`Player ${num} UID`} 
@@ -2590,24 +2592,6 @@ const Admin: React.FC = () => {
                     >
                       {!settings?.hideLogoUpload ? <Check size={12} /> : <X size={12} />}
                       {!settings?.hideLogoUpload ? 'SHOWN' : 'HIDDEN'}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-                    <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Profile Logo Edit</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Enable/Disable logo update in Profile</p>
-                    </div>
-                    <button 
-                      onClick={() => toggleSetting('allowProfileLogoEdit')}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[9px] transition-all ${
-                        settings?.allowProfileLogoEdit !== false
-                        ? 'bg-neon-green/20 text-neon-green border border-neon-green/50' 
-                        : 'bg-neon-red/20 text-neon-red border border-neon-red/50'
-                      }`}
-                    >
-                      {settings?.allowProfileLogoEdit !== false ? <Eye size={12} /> : <X size={12} />}
-                      {settings?.allowProfileLogoEdit !== false ? 'ENABLED' : 'DISABLED'}
                     </button>
                   </div>
 
@@ -4192,8 +4176,8 @@ const Admin: React.FC = () => {
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-500 uppercase">Roster (Players UIDs)</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[0, 1, 2, 3, 4].map(idx => (
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                    {[0, 1, 2, 3, 4, 5, 6].map(idx => (
                       <input
                         key={idx}
                         className={`bg-white/5 border rounded-lg p-2 text-[10px] font-mono transition-all ${
@@ -4203,8 +4187,8 @@ const Admin: React.FC = () => {
                         }`}
                         value={editingTeam.players?.[idx] || ''}
                         onChange={e => {
-                          const newPlayers = Array.isArray(editingTeam.players) ? [...editingTeam.players] : ['', '', '', '', ''];
-                          while (newPlayers.length < 5) newPlayers.push('');
+                          const newPlayers = Array.isArray(editingTeam.players) ? [...editingTeam.players] : ['', '', '', '', '', '', ''];
+                          while (newPlayers.length < 7) newPlayers.push('');
                           newPlayers[idx] = e.target.value.replace(/\D/g, '');
                           setEditingTeam({...editingTeam, players: newPlayers});
                           if (editingErrorFields.length > 0) setEditingErrorFields([]);
