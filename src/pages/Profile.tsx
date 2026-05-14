@@ -901,7 +901,9 @@ const Profile: React.FC = () => {
           <fieldset disabled={isLocked} className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 disabled:opacity-50">
             {formData.players.map((player, index) => (
               <div key={index} className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Player {index + 1} UID</label>
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                  {index < 5 ? `Player ${index + 1} UID` : `Sub Player ${index - 4} UID (Optional)`}
+                </label>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -912,7 +914,7 @@ const Profile: React.FC = () => {
                       ? 'border-neon-red/50 bg-neon-red/5 text-neon-red placeholder:text-neon-red/40'
                       : 'border-white/10 focus:border-neon-blue'
                   }`}
-                  placeholder="UID (Numbers Only)"
+                  placeholder={index < 5 ? "UID (Numbers Only)" : "UID (Sub - Optional)"}
                 />
               </div>
             ))}

@@ -186,6 +186,12 @@ const Registration: React.FC = () => {
       const playersRaw = formData.players;
       const playerIdsToCheck = playersRaw.filter(p => p.trim() !== '');
       
+      if (playerIdsToCheck.length < 5) {
+        setError("Please provide at least 5 players (Main Team).");
+        setLoading(false);
+        return;
+      }
+      
       // Internal duplicates check
       const duplicates: number[] = [];
       const seen = new Map<string, number>();
@@ -853,24 +859,28 @@ const Registration: React.FC = () => {
           <div className="space-y-4">
             <label className="text-xs font-black uppercase text-gray-500 flex items-center gap-2">
               <Users size={14} className="text-neon-blue" />
-              Players (7 Members)
+              Players (Max 7 Members)
             </label>
             <div className="grid gap-3">
               {formData.players.map((p, i) => (
-                <input
-                  key={i}
-                  required
-                  type="text"
-                  inputMode="numeric"
-                  placeholder={`Player ${i + 1} UID (Numbers Only)`}
-                  value={p}
-                  onChange={(e) => handlePlayerChange(i, e.target.value)}
-                  className={`w-full bg-white/5 border rounded-lg py-2.5 px-4 text-sm focus:outline-none transition-all ${
-                    errorFields.includes(i) 
-                      ? 'border-neon-red/50 bg-neon-red/5 text-neon-red placeholder:text-neon-red/40' 
-                      : 'border-white/10 focus:border-neon-blue'
-                  }`}
-                />
+                <div key={i} className="flex flex-col gap-1">
+                  {i >= 5 && (
+                    <span className="text-[10px] font-black text-neon-blue uppercase ml-1">Sub Player {i - 4} (Optional)</span>
+                  )}
+                  <input
+                    required={i < 5}
+                    type="text"
+                    inputMode="numeric"
+                    placeholder={i < 5 ? `Player ${i + 1} UID (Numbers Only)` : `Sub Player ${i - 4} UID (Optional)`}
+                    value={p}
+                    onChange={(e) => handlePlayerChange(i, e.target.value)}
+                    className={`w-full bg-white/5 border rounded-lg py-2.5 px-4 text-sm focus:outline-none transition-all ${
+                      errorFields.includes(i) 
+                        ? 'border-neon-red/50 bg-neon-red/5 text-neon-red placeholder:text-neon-red/40' 
+                        : 'border-white/10 focus:border-neon-blue'
+                    }`}
+                  />
+                </div>
               ))}
             </div>
           </div>

@@ -4193,7 +4193,7 @@ const Admin: React.FC = () => {
                           setEditingTeam({...editingTeam, players: newPlayers});
                           if (editingErrorFields.length > 0) setEditingErrorFields([]);
                         }}
-                        placeholder={`Player ${idx + 1}`}
+                        placeholder={idx < 5 ? `Player ${idx + 1}` : `Sub ${idx - 4}`}
                       />
                     ))}
                   </div>
