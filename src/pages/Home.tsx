@@ -230,6 +230,18 @@ const Home: React.FC = () => {
     return list;
   }, [features, settings?.showSoloPlayers]);
 
+  const getYouTubeId = (url: string) => {
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+  };
+
+  const getYouTubeThumbnail = (url: string) => {
+    const id = getYouTubeId(url);
+    if (!id) return null;
+    return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+  };
+
   if (loading) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center">
@@ -298,97 +310,145 @@ const Home: React.FC = () => {
         </section>
       )}
 
-      {/* Live Broadcast Section */}
+      {/* Improved Live Broadcast Section */}
       {liveLinks.length > 0 && (
-        <section className="space-y-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-8 bg-neon-red shadow-[0_0_10px_rgba(255,0,60,0.5)]" />
-              <h2 className="text-2xl font-black uppercase tracking-tighter italic">
-                LIVE <span className="text-neon-red">BROADCASTS</span>
-              </h2>
+        <section className="space-y-10">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-8 bg-neon-red shadow-[0_0_15px_rgba(255,0,60,0.6)]" />
+                <h2 className="text-3xl md:text-4xl font-black uppercase tracking-tighter italic">
+                  LIVE <span className="text-neon-red">ACTION</span>
+                </h2>
+              </div>
+              <p className="text-gray-500 text-xs md:text-sm font-bold uppercase tracking-widest pl-5">
+                Catch the latest tactical deployments and tournament archives
+              </p>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-neon-red animate-ping" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-neon-red">OnAir Now</span>
+            <div className="flex items-center gap-3 px-4 py-2 bg-neon-red/10 border border-neon-red/20 rounded-full self-start md:self-auto">
+              <div className="w-2.5 h-2.5 rounded-full bg-neon-red animate-pulse shadow-[0_0_8px_rgba(255,0,60,0.8)]" />
+              <span className="text-[10px] md:text-xs font-black uppercase tracking-[0.2em] text-neon-red">On Air / Recent</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {liveLinks.map((link, idx) => {
-              const thumbnailUrl = link.thumbnailUrl || (link.url.includes('youtube.com') || link.url.includes('youtu.be') ? `https://img.youtube.com/vi/${link.url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/)?.[2]}/maxresdefault.jpg` : null);
+              const youtubeThumbnail = getYouTubeThumbnail(link.url);
+              const thumbnailUrl = link.thumbnailUrl || youtubeThumbnail;
               
               return (
-              <motion.a
-                key={link.id}
-                href="#"
-                onClick={(e) => openExternalLink(e, link.url)}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.1 }}
-                className="glass-card group overflow-hidden border border-white/5 hover:border-neon-red/30 transition-all shadow-xl block"
-              >
-                <div className="aspect-video bg-black/40 relative overflow-hidden">
-                   {/* Thumbnail or Team Logos Overlay */}
-                   {thumbnailUrl ? (
-                     <div className="absolute inset-0 z-0">
-                       <ImageWithFallback 
-                         src={thumbnailUrl} 
-                         alt={link.title} 
-                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-60 group-hover:opacity-40" 
-                       />
-                     </div>
-                   ) : link.team1Id && link.team2Id ? (
-                     <div className="absolute inset-0 z-0 flex items-center justify-between px-6 opacity-50 group-hover:opacity-100 transition-opacity bg-gradient-to-br from-black/80 via-black/30 to-black/80">
-                        <div className="flex flex-col items-center gap-2 w-1/3">
-                          <div className="w-12 h-12 md:w-16 md:h-16 rounded-full overflow-hidden border-2 border-white/10 p-1 bg-black/60 shadow-lg">
-                            <ImageWithFallback src={link.team1Logo} alt={link.team1Name || 'Team 1'} className="w-full h-full object-contain" />
-                          </div>
-                          <span className="text-[10px] md:text-[11px] font-black text-white uppercase text-center break-words line-clamp-2 w-full">{link.team1Name}</span>
-                        </div>
-                        <div className="w-1/3 flex flex-col items-center justify-center">
-                          <div className="text-neon-blue font-black italic text-xl md:text-3xl drop-shadow-[0_0_10px_rgba(0,229,255,0.8)]">VS</div>
-                        </div>
-                        <div className="flex flex-col items-center gap-2 w-1/3">
-                          <div className="w-12 h-12 md:w-16 md:h-16 rounded-full overflow-hidden border-2 border-white/10 p-1 bg-black/60 shadow-lg">
-                            <ImageWithFallback src={link.team2Logo} alt={link.team2Name || 'Team 2'} className="w-full h-full object-contain" />
-                          </div>
-                          <span className="text-[10px] md:text-[11px] font-black text-white uppercase text-center break-words line-clamp-2 w-full">{link.team2Name}</span>
-                        </div>
-                     </div>
-                   ) : (
-                     <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=1000')] bg-cover bg-center opacity-20" />
-                   )}
- 
-                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent z-10" />
-                   
-                   {/* Play Button - Moved to corner to not overlap VS */}
-                   <div className="absolute bottom-4 right-4 z-20 group-hover:scale-110 transition-transform duration-500">
-                      <div className="w-10 h-10 rounded-full bg-neon-red/90 text-white flex items-center justify-center border border-neon-red/40 group-hover:bg-neon-red transition-all shadow-[0_0_15px_rgba(255,46,99,0.8)]">
-                        <Youtube size={20} />
+                <motion.div
+                  key={link.id}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: idx * 0.1 }}
+                >
+                  <a
+                    href="#"
+                    onClick={(e) => openExternalLink(e, link.url)}
+                    className="group relative block transition-all duration-500"
+                  >
+                    {/* Hover Glow Effect */}
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-neon-red to-neon-purple rounded-[2rem] opacity-0 group-hover:opacity-30 blur-xl transition-all duration-500" />
+                    
+                    {/* Main Card */}
+                    <div className="relative glass-card overflow-hidden border border-white/5 group-hover:border-neon-red/40 rounded-[1.5rem] bg-black/40 backdrop-blur-sm shadow-2xl transition-all duration-500">
+                      
+                      {/* Thumbnail Container */}
+                      <div className="aspect-video relative overflow-hidden bg-white/5">
+                         {thumbnailUrl ? (
+                           <div className="absolute inset-0">
+                             <ImageWithFallback 
+                               src={thumbnailUrl} 
+                               alt={link.title} 
+                               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-60 group-hover:opacity-80" 
+                             />
+                           </div>
+                         ) : (
+                           <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-900 to-black">
+                             <Youtube size={48} className="text-white/10" />
+                           </div>
+                         )}
+
+                         {/* Team VS Overlay (Only if teams are set) */}
+                         {link.team1Id && link.team2Id && (
+                           <div className="absolute inset-0 flex items-center justify-between px-4 md:px-8 z-10">
+                              <div className="flex flex-col items-center gap-2 w-1/3">
+                                <div className="w-10 h-10 md:w-14 md:h-14 rounded-full overflow-hidden border-2 border-white/20 p-1 bg-black/60 shadow-xl group-hover:scale-110 transition-transform">
+                                  <ImageWithFallback src={link.team1Logo} alt={link.team1Name || 'Team 1'} className="w-full h-full object-contain" />
+                                </div>
+                                <span className="text-[9px] md:text-[10px] font-black text-white/90 uppercase text-center truncate w-full drop-shadow-md">{link.team1Name}</span>
+                              </div>
+                              <div className="w-1/3 flex flex-col items-center justify-center">
+                                <div className="text-neon-red font-black italic text-xl md:text-2xl drop-shadow-[0_0_15px_rgba(255,0,60,0.8)]">VS</div>
+                              </div>
+                              <div className="flex flex-col items-center gap-2 w-1/3">
+                                <div className="w-10 h-10 md:w-14 md:h-14 rounded-full overflow-hidden border-2 border-white/20 p-1 bg-black/60 shadow-xl group-hover:scale-110 transition-transform">
+                                  <ImageWithFallback src={link.team2Logo} alt={link.team2Name || 'Team 2'} className="w-full h-full object-contain" />
+                                </div>
+                                <span className="text-[9px] md:text-[10px] font-black text-white/90 uppercase text-center truncate w-full drop-shadow-md">{link.team2Name}</span>
+                              </div>
+                           </div>
+                         )}
+
+                         {/* Overlay Gradients */}
+                         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/30 opacity-60 group-hover:opacity-40 transition-opacity z-0" />
+                         
+                         {/* Play Button Overlay */}
+                         <div className="absolute inset-0 flex items-center justify-center transition-all duration-500 z-20">
+                            <div className="w-16 h-16 rounded-full bg-neon-red/20 backdrop-blur-sm border border-neon-red/30 flex items-center justify-center text-white scale-90 opacity-0 group-hover:opacity-100 group-hover:scale-100 transition-all duration-500">
+                               <div className="w-12 h-12 rounded-full bg-neon-red flex items-center justify-center shadow-[0_0_20px_rgba(255,46,99,0.8)]">
+                                 <Youtube size={24} fill="currentColor" />
+                               </div>
+                            </div>
+                         </div>
+
+                         {/* Live Tag if applicable or index */}
+                         <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
+                           <div className="px-2.5 py-1 bg-black/60 backdrop-blur-md border border-white/10 text-white text-[9px] font-black rounded-lg uppercase tracking-widest shadow-lg">
+                             POV #{idx + 1}
+                           </div>
+                           {link.url.includes('live') && (
+                             <div className="px-2.5 py-1 bg-neon-red text-white text-[9px] font-black rounded-lg uppercase tracking-widest animate-pulse shadow-[0_0_10px_rgba(255,46,99,0.5)]">
+                               LIVE
+                             </div>
+                           )}
+                         </div>
+
+                         {/* Duration or Timestamp Placeholder */}
+                         <div className="absolute bottom-4 right-4 z-20 px-2 py-1 bg-black/80 text-white text-[10px] font-mono font-bold rounded border border-white/10">
+                           {getYouTubeId(link.url) ? 'HQ VIDEO' : 'STREAM'}
+                         </div>
                       </div>
-                   </div>
-                   
-                   {/* Badge */}
-                   <div className="absolute top-4 left-4 z-20 px-2 py-1 bg-neon-red text-white text-[8px] md:text-[9px] font-black rounded border border-neon-red/50 uppercase tracking-widest shadow-[0_0_10px_rgba(255,46,99,0.5)]">
-                     Match {idx + 1}
-                   </div>
-                </div>
-                <div className="p-5 space-y-2 relative">
-                   <h3 className="font-black text-lg text-white group-hover:text-neon-red transition-colors uppercase italic truncate">
-                     {link.title}
-                   </h3>
-                   <p className="text-[10px] text-gray-500 font-bold leading-relaxed line-clamp-2">
-                     {link.description || 'Watch the live tactical objective execution of MGB tournament matches.'}
-                   </p>
-                   <div className="pt-3 flex items-center justify-between">
-                     <span className="text-[9px] font-black text-neon-red uppercase tracking-widest flex items-center gap-2">
-                       <TrendingUp size={12} /> Watch Now
-                     </span>
-                     <ArrowRight size={14} className="text-gray-600 group-hover:translate-x-2 group-hover:text-neon-red transition-all" />
-                   </div>
-                </div>
-              </motion.a>
+
+                      {/* Content Section */}
+                      <div className="p-6 space-y-3">
+                         <h3 className="font-black text-xl text-white group-hover:text-neon-red transition-colors uppercase italic tracking-tight line-clamp-1">
+                           {link.title}
+                         </h3>
+                         {link.description && (
+                           <p className="text-xs text-gray-500 font-bold uppercase tracking-tight line-clamp-2 leading-relaxed opacity-70 group-hover:opacity-100 transition-opacity">
+                             {link.description}
+                           </p>
+                         )}
+                         <div className="pt-4 flex items-center justify-between border-t border-white/5">
+                           <div className="flex items-center gap-2">
+                             <TrendingUp size={14} className="text-neon-red" />
+                             <span className="text-[10px] font-black text-neon-red uppercase tracking-[0.2em]">ENGAGING NOW</span>
+                           </div>
+                           <motion.div 
+                             whileHover={{ x: 5 }}
+                             className="flex items-center gap-1.5 text-gray-400 group-hover:text-white transition-colors"
+                           >
+                             <span className="text-[9px] font-black uppercase tracking-widest">Open Video</span>
+                             <ArrowRight size={14} />
+                           </motion.div>
+                         </div>
+                      </div>
+                    </div>
+                  </a>
+                </motion.div>
               );
             })}
           </div>
