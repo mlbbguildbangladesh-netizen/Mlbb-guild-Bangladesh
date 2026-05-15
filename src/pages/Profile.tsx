@@ -451,9 +451,11 @@ const Profile: React.FC = () => {
       }
 
       try {
-        await updateDoc(doc(db, 'users', actualUserId), {
-          phoneNumber: formData.phoneNumber
-        });
+        await setDoc(doc(db, 'users', actualUserId), {
+          phoneNumber: formData.phoneNumber,
+          email: formData.email || auth.currentUser?.email || '',
+          updatedAt: serverTimestamp()
+        }, { merge: true });
       } catch (error) {
         handleFirestoreError(error, OperationType.UPDATE, `users/${actualUserId}`);
       }

@@ -156,13 +156,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               ? (new Date().getTime() - new Date(fUser.metadata.creationTime).getTime()) < 60000 
               : false;
 
-            if (!isAdminEmail && !isJustCreated) {
+            if (!isJustCreated) {
               console.log("User document missing. Setting up default profile...");
               // Attempt to recreate profile if it somehow got deleted or failed to create
               try {
                 // If it fails, they will just use the default state below
                 // We're not throwing error to allow them to at least see the app
-                const isVerified = true; // Based on Login.tsx auto verify
+                setDoc(userRef, {
+                  displayName: isAdminEmail ? 'Admin' : (fUser.displayName || 'New Recruiter'),
+                  email: fUser.email || '',
+                  role: isAdminEmail ? 'admin' : 'team',
+                  points: isAdminEmail ? 10000 : 0,
+                  diamonds: 0,
+                  createdAt: new Date().toISOString(),
+                  isVerified: true
+                }, { merge: true }).catch(e => console.error("Could not setDoc new profile:", e));
               } catch (e) {
                 console.error("Could not recreate profile", e);
               }

@@ -242,7 +242,7 @@ const Home: React.FC = () => {
     <div className="space-y-12 md:space-y-24 py-6 md:py-10">
       {/* Hero Section */}
       {settings?.showHeroSection !== false && (
-        <section className="relative h-[60vh] md:h-[80vh] flex items-center justify-center text-center overflow-hidden rounded-3xl">
+        <section className="relative min-h-[60vh] md:min-h-[70vh] py-16 md:py-24 flex items-center justify-center text-center overflow-hidden rounded-3xl">
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-10" />
           <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=2070')] bg-cover bg-center opacity-40 scale-110 hover:scale-100 transition-transform duration-1000" />
           
@@ -326,7 +326,7 @@ const Home: React.FC = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.1 }}
-                className="glass-card group overflow-hidden border border-white/5 hover:border-neon-red/30 transition-all shadow-xl"
+                className="glass-card group overflow-hidden border border-white/5 hover:border-neon-red/30 transition-all shadow-xl block"
               >
                 <div className="aspect-video bg-black/40 relative overflow-hidden">
                    {/* Thumbnail or Team Logos Overlay */}
@@ -339,33 +339,38 @@ const Home: React.FC = () => {
                        />
                      </div>
                    ) : link.team1Id && link.team2Id ? (
-                     <div className="absolute inset-0 z-0 flex items-center justify-around px-8 opacity-40 group-hover:opacity-60 transition-opacity">
-                        <div className="flex flex-col items-center gap-2">
-                          <div className="w-16 h-16 rounded-full overflow-hidden border border-white/10 p-1 bg-black/40">
+                     <div className="absolute inset-0 z-0 flex items-center justify-between px-6 opacity-50 group-hover:opacity-100 transition-opacity bg-gradient-to-br from-black/80 via-black/30 to-black/80">
+                        <div className="flex flex-col items-center gap-2 w-1/3">
+                          <div className="w-12 h-12 md:w-16 md:h-16 rounded-full overflow-hidden border-2 border-white/10 p-1 bg-black/60 shadow-lg">
                             <ImageWithFallback src={link.team1Logo} alt={link.team1Name || 'Team 1'} className="w-full h-full object-contain" />
                           </div>
-                          <span className="text-[10px] font-black text-white uppercase truncate max-w-[80px]">{link.team1Name}</span>
+                          <span className="text-[10px] md:text-[11px] font-black text-white uppercase text-center break-words line-clamp-2 w-full">{link.team1Name}</span>
                         </div>
-                        <div className="text-neon-blue font-black italic text-xl">VS</div>
-                        <div className="flex flex-col items-center gap-2">
-                          <div className="w-16 h-16 rounded-full overflow-hidden border border-white/10 p-1 bg-black/40">
+                        <div className="w-1/3 flex flex-col items-center justify-center">
+                          <div className="text-neon-blue font-black italic text-xl md:text-3xl drop-shadow-[0_0_10px_rgba(0,229,255,0.8)]">VS</div>
+                        </div>
+                        <div className="flex flex-col items-center gap-2 w-1/3">
+                          <div className="w-12 h-12 md:w-16 md:h-16 rounded-full overflow-hidden border-2 border-white/10 p-1 bg-black/60 shadow-lg">
                             <ImageWithFallback src={link.team2Logo} alt={link.team2Name || 'Team 2'} className="w-full h-full object-contain" />
                           </div>
-                          <span className="text-[10px] font-black text-white uppercase truncate max-w-[80px]">{link.team2Name}</span>
+                          <span className="text-[10px] md:text-[11px] font-black text-white uppercase text-center break-words line-clamp-2 w-full">{link.team2Name}</span>
                         </div>
                      </div>
                    ) : (
                      <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=1000')] bg-cover bg-center opacity-20" />
                    )}
-
-                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent z-10" />
-                   <div className="absolute inset-0 flex items-center justify-center group-hover:scale-110 transition-transform duration-500 z-20">
-                      <div className="w-16 h-16 rounded-full bg-neon-red/20 flex items-center justify-center border border-neon-red/40 group-hover:bg-neon-red group-hover:text-black transition-all shadow-[0_0_20px_rgba(255,46,99,0.3)]">
-                        <Youtube size={32} />
+ 
+                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent z-10" />
+                   
+                   {/* Play Button - Moved to corner to not overlap VS */}
+                   <div className="absolute bottom-4 right-4 z-20 group-hover:scale-110 transition-transform duration-500">
+                      <div className="w-10 h-10 rounded-full bg-neon-red/90 text-white flex items-center justify-center border border-neon-red/40 group-hover:bg-neon-red transition-all shadow-[0_0_15px_rgba(255,46,99,0.8)]">
+                        <Youtube size={20} />
                       </div>
                    </div>
+                   
                    {/* Badge */}
-                   <div className="absolute top-4 left-4 z-20 px-2 py-1 bg-neon-red text-white text-[8px] font-black rounded uppercase tracking-widest shadow-[0_0_10px_rgba(255,46,99,0.5)]">
+                   <div className="absolute top-4 left-4 z-20 px-2 py-1 bg-neon-red text-white text-[8px] md:text-[9px] font-black rounded border border-neon-red/50 uppercase tracking-widest shadow-[0_0_10px_rgba(255,46,99,0.5)]">
                      Match {idx + 1}
                    </div>
                 </div>
