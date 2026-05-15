@@ -68,10 +68,10 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   // Do not throw in async callbacks as it crashes the UI
   toast.error(`Permission Error [${operationType}]: ${errInfo.error}`);
 }
-import { Registration, Team, MatchResultType, AppSetting, Transaction } from '../types';
+import { Registration, Team, MatchResultType, AppSetting, Transaction, LiveLink } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Check, X, Shield, Users, Sword, Swords, TrendingUp, History, Filter, Eye, AlertCircle, AlertTriangle, Download, Settings, Lock, Unlock, User as UserIcon, Plus, Minus, Bot, Send, Trash, Loader2, Calendar, KeyRound, Search, CheckCircle2, FileText, Copy } from 'lucide-react';
+import { Check, X, Shield, Users, Sword, Swords, TrendingUp, History, Filter, Eye, AlertCircle, AlertTriangle, Download, Settings, Lock, Unlock, User as UserIcon, Plus, Minus, Bot, Send, Trash, Loader2, Calendar, KeyRound, Search, CheckCircle2, FileText, Copy, Youtube, Image } from 'lucide-react';
 import { recordMatchResult } from '../lib/utils';
 import { FormBuilder } from '../components/FormBuilder';
 import SchedulesAdmin from '../components/SchedulesAdmin';
@@ -89,7 +89,8 @@ const CLEARABLE_SECTIONS = [
   { id: 'challenges', name: 'Challenges', col: 'challenges', desc: 'Challenge requests' },
   { id: 'schedules', name: 'Schedules', col: 'schedules', desc: 'Scheduled matches' },
   { id: 'seasons', name: 'Seasons', col: 'seasons', desc: 'Season configurations' },
-  { id: 'soloPlayers', name: 'Solo Players', col: 'soloPlayers', desc: 'Mercenary directory profiles' }
+  { id: 'soloPlayers', name: 'Solo Players', col: 'soloPlayers', desc: 'Mercenary directory profiles' },
+  { id: 'live_links', name: 'Live Links', col: 'live_links', desc: 'All live broadcast links' }
 ];
 
 import { useAuth } from '../context/AuthContext';
@@ -130,6 +131,7 @@ This application is a comprehensive management system for Mobile Legends: Bang B
 - \`settings/global\`: System-wide configuration, feature flags, and staff list.
 - \`seasons\`: Management of tournament timelines.
 - \`soloPlayers\`: Directory of mercenary profiles.
+- \`live_links\`: Live match broadcast links.
 - \`notifications\`: User-specific alert system.
 
 ## DESIGN AESTHETIC
@@ -163,6 +165,8 @@ const Countdown: React.FC<{ endTime: string }> = ({ endTime }) => {
 const Admin: React.FC = () => {
   const { isAdmin: isAuthAdmin, isModerator, moderatorPermissions, loading: authLoading, firebaseUser } = useAuth();
   const [activeTab, setActiveTab] = useState<string>('registrations');
+  const [logoSearchTerm, setLogoSearchTerm] = useState('');
+  const [logoTargetType, setLogoTargetType] = useState<'teams' | 'users'>('teams');
 
   useEffect(() => {
     if (authLoading) return;
@@ -179,6 +183,7 @@ const Admin: React.FC = () => {
   const [regFilter, setRegFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [seasons, setSeasons] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [authUsers, setAuthUsers] = useState<any[]>([]);
   const [loadingAuthUsers, setLoadingAuthUsers] = useState(false);
@@ -194,6 +199,7 @@ const Admin: React.FC = () => {
   // Confirm Rejection state
   const [confirmRejectId, setConfirmRejectId] = useState<string | null>(null);
   const [confirmDeleteRegId, setConfirmDeleteRegId] = useState<string | null>(null);
+  const [confirmLiveDeleteId, setConfirmLiveDeleteId] = useState<string | null>(null);
   const [deleteConfirmTeam, setDeleteConfirmTeam] = useState<{id: string, name: string} | null>(null);
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<{id: string, email: string} | null>(null);
   const [showResetModal, setShowResetModal] = useState(false);
@@ -205,6 +211,15 @@ const Admin: React.FC = () => {
   const [siteResetSuccessMessage, setSiteResetSuccessMessage] = useState<string | null>(null);
   const [siteResetProgress, setSiteResetProgress] = useState<string>('');
   const [allSchedules, setAllSchedules] = useState<any[]>([]);
+  const [liveLinks, setLiveLinks] = useState<LiveLink[]>([]);
+  const [newLiveLink, setNewLiveLink] = useState({ 
+    title: '', 
+    url: '', 
+    description: '', 
+    order: 0,
+    team1Id: '',
+    team2Id: ''
+  });
   
   const [nukeStep, setNukeStep] = useState(0);
   const [nukeInput, setNukeInput] = useState('');
@@ -244,12 +259,25 @@ const Admin: React.FC = () => {
     if (authLoading) return;
     if (!isAuthAdmin && !isModerator) return;
 
+    // Timeout to prevent infinite loading screen
+    const timer = setTimeout(() => setLoading(false), 500);
+
     const qReg = query(collection(db, 'registrations'), orderBy('timestamp', 'desc'));
     const qTeams = query(collection(db, 'teams'), orderBy('points', 'desc'));
     const qUsers = query(collection(db, 'users'), orderBy('email', 'asc'));
     const qTrans = query(collection(db, 'transactions'), orderBy('timestamp', 'desc'));
     const qPassReq = query(collection(db, 'passwordRequests'), orderBy('createdAt', 'desc'));
     const qSchedules = query(collection(db, 'schedules'), orderBy('startTime', 'desc'));
+    const qSeasons = query(collection(db, 'seasons'));
+    const qLiveLinks = query(collection(db, 'live_links'), orderBy('order', 'asc'));
+
+    const unsubSeasons = onSnapshot(qSeasons, (snap) => {
+       setSeasons(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    const unsubLiveLinks = onSnapshot(qLiveLinks, (snap) => {
+       setLiveLinks(snap.docs.map(d => ({ id: d.id, ...d.data() } as LiveLink)));
+    });
 
     const unsubSchedules = onSnapshot(qSchedules, (snap) => {
        setAllSchedules(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -346,7 +374,7 @@ const Admin: React.FC = () => {
       setLoading(false);
     });
 
-    return () => { unsubReg(); unsubTeams(); unsubUsers(); unsubSettings(); unsubTrans(); unsubPassReq(); unsubSchedules(); };
+    return () => { clearTimeout(timer); unsubReg(); unsubTeams(); unsubUsers(); unsubSettings(); unsubTrans(); unsubPassReq(); unsubSeasons(); unsubSchedules(); unsubLiveLinks(); };
   }, [isAuthAdmin, isModerator, moderatorPermissions, authLoading]);
 
   const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -433,6 +461,39 @@ const Admin: React.FC = () => {
     if (processingId) return;
     setProcessingId(reg.id);
     try {
+      // Final uniqueness check before approval
+      const players = (reg.players || []).filter(p => typeof p === 'string' && p.trim() !== '');
+      if (players.length > 0) {
+        // 1. Check existing approved teams
+        const teamsQuery = query(collection(db, 'teams'), where('players', 'array-contains-any', players));
+        const teamsSnapshot = await getDocs(teamsQuery);
+        if (!teamsSnapshot.empty) {
+          const conflictingTeam = teamsSnapshot.docs[0].data();
+          const matchedUid = players.find(uid => (conflictingTeam.players as string[]).includes(uid));
+          toast.error(`Approval Cancelled: Player UID ${matchedUid} is already assigned to active team "${conflictingTeam.teamName}".`);
+          setProcessingId(null);
+          return;
+        }
+
+        // 2. Check other pending registrations (excluding current)
+        const regQuery = query(
+          collection(db, 'registrations'), 
+          where('status', '==', 'pending'),
+          where('players', 'array-contains-any', players)
+        );
+        const regSnapshot = await getDocs(regQuery);
+        const conflictRegDoc = regSnapshot.docs.find(d => d.id !== reg.id);
+        
+        if (conflictRegDoc) {
+          const conflictingRegData = conflictRegDoc.data();
+          const teamName = conflictingRegData.teamName;
+          const matchedUid = players.find(uid => (conflictingRegData.players as string[]).includes(uid));
+          toast.error(`Approval Cancelled: Player UID ${matchedUid} matches another pending registration for team "${teamName}".`);
+          setProcessingId(null);
+          return;
+        }
+      }
+
       const batch = writeBatch(db);
       
       // 1. Create Team
@@ -568,6 +629,32 @@ const Admin: React.FC = () => {
     }
   };
 
+  const handleQuickLogoUpdate = async (id: string, type: 'teams' | 'users', newUrl: string) => {
+    if (processingId) return;
+    setProcessingId(id);
+    try {
+      let finalUrl = newUrl;
+      if (finalUrl.includes('drive.google.com')) {
+        const match1 = finalUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        const match2 = finalUrl.match(/id=([a-zA-Z0-9_-]+)/);
+        const driveId = (match1 && match1[1]) ? match1[1] : (match2 && match2[1] ? match2[1] : null);
+        if (driveId) {
+          finalUrl = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000`;
+        }
+      }
+
+      await updateDoc(doc(db, type, id), {
+        logoUrl: finalUrl,
+        updatedAt: serverTimestamp()
+      });
+      toast.success('Logo updated successfully!');
+    } catch (error) {
+       handleFirestoreError(error, OperationType.UPDATE, `${type}/${id}`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   const handleManualCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (processingId) return;
@@ -611,7 +698,8 @@ const Admin: React.FC = () => {
       });
 
       if (duplicates.length > 0) {
-        toast.error("Duplicate player UIDs found in roster.");
+        const firstDup = playersRaw[duplicates[0]];
+        toast.error(`Duplicate player UID ${firstDup} found within this team's roster.`);
         setManualErrorFields([...new Set(duplicates)]);
         setProcessingId(null);
         return;
@@ -630,7 +718,7 @@ const Admin: React.FC = () => {
           const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
           if (conflictIdx !== -1) setManualErrorFields([conflictIdx]);
 
-          toast.error(`Player UID ${matchedUid} is already registered on ${teamName}.`);
+          toast.error(`Conflict Detected: Player UID ${matchedUid} is already registered on the active team "${teamName}".`);
           setProcessingId(null);
           return;
         }
@@ -651,7 +739,7 @@ const Admin: React.FC = () => {
           const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
           if (conflictIdx !== -1) setManualErrorFields([conflictIdx]);
 
-          toast.error(`Player UID ${matchedUid} is already in a pending registration for team "${teamName}".`);
+          toast.error(`Conflict Detected: Player UID ${matchedUid} is already in a pending registration for team "${teamName}".`);
           setProcessingId(null);
           return;
         }
@@ -673,6 +761,7 @@ const Admin: React.FC = () => {
           teamName: manualTeam.teamName,
           leaderName: manualTeam.leaderName,
           logoUrl: manualTeam.logoUrl,
+          seasonId: settings?.currentSeasonId || '',
           players: [manualTeam.player1, manualTeam.player2, manualTeam.player3, manualTeam.player4, manualTeam.player5, manualTeam.player6, manualTeam.player7].filter(p => p && p.trim() !== '')
         })
       });
@@ -1284,6 +1373,20 @@ const Admin: React.FC = () => {
     }
   };
 
+  const adjustTeamSeason = async (teamId: string, seasonId: string) => {
+    if (processingId) return;
+    setProcessingId(teamId);
+    try {
+      await updateDoc(doc(db, 'teams', teamId), { seasonId });
+      toast.success(seasonId ? "Team added to current season!" : "Team removed from season.");
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Failed to update season status.");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   const handleUpdateTeam = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTeam) return;
@@ -1316,7 +1419,8 @@ const Admin: React.FC = () => {
       });
 
       if (duplicates.length > 0) {
-        toast.error("Duplicate player UIDs found in roster.");
+        const firstDup = playersRaw[duplicates[0]];
+        toast.error(`Duplicate player UID ${firstDup} found in team roster.`);
         setEditingErrorFields([...new Set(duplicates)]);
         setProcessingId(null);
         return;
@@ -1338,7 +1442,7 @@ const Admin: React.FC = () => {
           const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
           if (conflictIdx !== -1) setEditingErrorFields([conflictIdx]);
 
-          toast.error(`Player UID ${matchedUid} is already registered on ${teamName}.`);
+          toast.error(`Update Conflict: Player UID ${matchedUid} is already registered on team "${teamName}".`);
           setProcessingId(null);
           return;
         }
@@ -1359,7 +1463,7 @@ const Admin: React.FC = () => {
           const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
           if (conflictIdx !== -1) setEditingErrorFields([conflictIdx]);
 
-          toast.error(`Player UID ${matchedUid} is already in a pending registration for team "${teamName}".`);
+          toast.error(`Update Conflict: Player UID ${matchedUid} is already in a pending registration for team "${teamName}".`);
           setProcessingId(null);
           return;
         }
@@ -1387,6 +1491,7 @@ const Admin: React.FC = () => {
         streak: Number(editingTeam.streak || 0),
         logoUrl: finalLogoUrl,
         phoneNumber: editingTeam.phoneNumber || '',
+        seasonId: editingTeam.seasonId || '',
         players: players
       });
 
@@ -1427,6 +1532,77 @@ const Admin: React.FC = () => {
     } catch (err) {
       console.error('Update attempt failed:', err);
       handleFirestoreError(err, OperationType.UPDATE, `teams/${editingTeam.id}`);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const getYoutubeThumbnail = (url: string) => {
+    try {
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+      const match = url.match(regExp);
+      if (match && match[2].length === 11) {
+        return `https://img.youtube.com/vi/${match[2]}/maxresdefault.jpg`;
+      }
+    } catch (e) {
+      console.error("Thumbnail extraction error", e);
+    }
+    return null;
+  };
+
+  const handleAddLiveLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newLiveLink.title || !newLiveLink.url) {
+      toast.error("Title and URL are required");
+      return;
+    }
+    setProcessingId('add-live-link');
+    try {
+      const team1 = teams.find(t => t.id === newLiveLink.team1Id);
+      const team2 = teams.find(t => t.id === newLiveLink.team2Id);
+      const thumbnailUrl = getYoutubeThumbnail(newLiveLink.url);
+
+      await addDoc(collection(db, 'live_links'), {
+        title: newLiveLink.title,
+        url: newLiveLink.url,
+        thumbnailUrl: thumbnailUrl || null,
+        description: newLiveLink.description || '',
+        order: Number(newLiveLink.order),
+        team1Id: newLiveLink.team1Id || null,
+        team2Id: newLiveLink.team2Id || null,
+        team1Name: team1?.teamName || null,
+        team2Name: team2?.teamName || null,
+        team1Logo: team1?.logoUrl || null,
+        team2Logo: team2?.logoUrl || null,
+        createdAt: serverTimestamp()
+      });
+      setNewLiveLink({ 
+        title: '', 
+        url: '', 
+        description: '', 
+        order: liveLinks.length + 1,
+        team1Id: '',
+        team2Id: ''
+      });
+      toast.success("Live link added!");
+    } catch (err) {
+      console.error(err);
+      handleFirestoreError(err, OperationType.CREATE, 'live_links');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleDeleteLiveLink = async (id: string) => {
+    if (processingId) return;
+    setProcessingId(id);
+    try {
+      await deleteDoc(doc(db, 'live_links', id));
+      toast.success("Live link deleted");
+      setConfirmLiveDeleteId(null);
+    } catch (err) {
+      console.error(err);
+      handleFirestoreError(err, OperationType.DELETE, `live_links/${id}`);
     } finally {
       setProcessingId(null);
     }
@@ -1531,6 +1707,8 @@ const Admin: React.FC = () => {
             { id: 'pass-reqs', icon: KeyRound, name: 'Pass Req' },
             { id: 'transactions', icon: History, name: 'Logs' },
             { id: 'seasons', icon: Calendar, name: 'Seasons' },
+            { id: 'logo-update', icon: Image, name: 'Logos' },
+            { id: 'live-links', icon: Youtube, name: 'Live' },
             { id: 'settings', icon: Settings, name: 'Config' },
             { id: 'blueprint', icon: FileText, name: 'Blueprint' },
             { id: 'form-builder', icon: Filter, name: 'Forms' },
@@ -1831,7 +2009,7 @@ const Admin: React.FC = () => {
                   {[1, 2, 3, 4, 5, 6, 7].map((num, idx) => (
                     <input 
                       key={num}
-                      placeholder={`Player ${num} UID`} 
+                      placeholder={num <= 5 ? `Player ${num} UID` : `Sub ${num - 5} UID (Optional)`} 
                       className={`bg-white/5 border rounded-lg p-2 text-xs transition-all ${
                         manualErrorFields.includes(idx)
                           ? 'border-neon-red bg-neon-red/5 text-neon-red placeholder:text-neon-red/40'
@@ -1860,7 +2038,14 @@ const Admin: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="font-black text-lg">{team.teamName}</h3>
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">{team.uniqueId}</p>
+                    <div className="flex gap-2 items-center">
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">{team.uniqueId}</p>
+                      {team.seasonId && (
+                        <span className="px-1.5 rounded bg-white/10 text-white text-[10px] font-black tracking-widest uppercase">
+                          {seasons.find(s => s.id === team.seasonId)?.name || 'Season'}
+                        </span>
+                      )}
+                    </div>
                     {team.phoneNumber && <p className="text-[10px] font-bold text-neon-blue uppercase mt-1">{team.phoneNumber}</p>}
                   </div>
                 </div>
@@ -1928,27 +2113,52 @@ const Admin: React.FC = () => {
                   </div>
                 )}
 
-                <div className="flex flex-wrap gap-2">
-                  <Link 
-                    to={`/profile?id=${team.id}`}
-                    className="flex-1 py-2 px-3 rounded-lg bg-white/5 text-[10px] font-black hover:bg-white/10 transition-all flex items-center justify-center gap-2"
-                  >
-                    <UserIcon size={12} className="text-neon-blue" />
-                    VIEW
-                  </Link>
-                  <button 
-                    onClick={() => setEditingTeam(team)}
-                    className="flex-1 py-2 px-3 rounded-lg bg-neon-blue/10 text-neon-blue text-[10px] font-black hover:bg-neon-blue/20 transition-all flex items-center justify-center gap-2"
-                  >
-                    <Settings size={12} />
-                    EDIT
-                  </button>
-                  <button 
-                    onClick={() => setDeleteConfirmTeam({ id: team.id, name: team.teamName })}
-                    className="flex-1 py-2 px-3 rounded-lg bg-neon-red/10 text-neon-red text-[10px] font-black hover:bg-neon-red/20 transition-all font-mono"
-                  >
-                    DELETE
-                  </button>
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Link 
+                      to={`/profile?id=${team.id}`}
+                      className="flex-1 py-2 px-3 rounded-lg bg-white/5 text-[10px] font-black hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                    >
+                      <UserIcon size={12} className="text-neon-blue" />
+                      VIEW
+                    </Link>
+                    <button 
+                      onClick={() => setEditingTeam(team)}
+                      className="flex-1 py-2 px-3 rounded-lg bg-neon-blue/10 text-neon-blue text-[10px] font-black hover:bg-neon-blue/20 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Settings size={12} />
+                      EDIT
+                    </button>
+                    <button 
+                      onClick={() => setDeleteConfirmTeam({ id: team.id, name: team.teamName })}
+                      className="flex-1 py-2 px-3 rounded-lg bg-neon-red/10 text-neon-red text-[10px] font-black hover:bg-neon-red/20 transition-all font-mono"
+                    >
+                      DELETE
+                    </button>
+                  </div>
+                  {settings?.currentSeasonId && (
+                    <div className="flex flex-wrap gap-2">
+                      {team.seasonId === settings.currentSeasonId ? (
+                        <button
+                          onClick={() => adjustTeamSeason(team.id, '')}
+                          disabled={!!processingId}
+                          className="flex-1 py-2 px-3 rounded-lg bg-neon-red/10 text-neon-red text-[10px] font-black hover:bg-neon-red/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          <Minus size={12} />
+                          REMOVE FROM ACTIVE SEASON
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => adjustTeamSeason(team.id, settings.currentSeasonId!)}
+                          disabled={!!processingId}
+                          className="flex-1 py-2 px-3 rounded-lg bg-neon-cyan/10 text-neon-cyan text-[10px] font-black hover:bg-neon-cyan/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          <Plus size={12} />
+                          ADD TO CURRENT SEASON
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -2475,6 +2685,209 @@ const Admin: React.FC = () => {
                 <p className="text-gray-500 text-xs text-center col-span-full">No pending requests</p>
               )}
             </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'live-links' && (
+          <motion.div
+            key="live-links-tab"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            className="space-y-8"
+          >
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-black italic uppercase">MATCH <span className="text-neon-blue">LIVE LINKS</span></h2>
+              <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest leading-none">Global broadcast directory</p>
+            </div>
+
+            <div className="glass-card p-6 border border-neon-blue/20 bg-neon-blue/5">
+              <form onSubmit={handleAddLiveLink} className="space-y-6">
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Broadcast Title</label>
+                    <input 
+                      className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-xs focus:border-neon-blue outline-none transition-all"
+                      placeholder="e.g. MGB SEASON 5 - GRAND FINALS"
+                      value={newLiveLink.title}
+                      onChange={e => setNewLiveLink({...newLiveLink, title: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">YouTube URL</label>
+                    <div className="relative">
+                      <Youtube className="absolute left-3 top-1/2 -translate-y-1/2 text-neon-red" size={16} />
+                      <input 
+                        className="w-full bg-black/40 border border-white/10 rounded-lg p-3 pl-10 text-xs focus:border-neon-blue outline-none transition-all font-mono"
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        value={newLiveLink.url}
+                        onChange={e => setNewLiveLink({...newLiveLink, url: e.target.value})}
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Team 1 (Optional)</label>
+                    <select
+                      className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-xs focus:border-neon-blue outline-none transition-all uppercase"
+                      value={newLiveLink.team1Id}
+                      onChange={e => setNewLiveLink({...newLiveLink, team1Id: e.target.value})}
+                    >
+                      <option value="">None</option>
+                      {teams.sort((a,b) => (a.teamName || '').localeCompare(b.teamName || '')).map(t => (
+                        <option key={t.id} value={t.id}>{t.teamName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Team 2 (Optional)</label>
+                    <select
+                      className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-xs focus:border-neon-blue outline-none transition-all uppercase"
+                      value={newLiveLink.team2Id}
+                      onChange={e => setNewLiveLink({...newLiveLink, team2Id: e.target.value})}
+                    >
+                      <option value="">None</option>
+                      {teams.sort((a,b) => (a.teamName || '').localeCompare(b.teamName || '')).map(t => (
+                        <option key={t.id} value={t.id}>{t.teamName}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-3 gap-6">
+                   <div className="md:col-span-2 space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Short Description (Optional)</label>
+                    <input 
+                      className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-xs focus:border-neon-blue outline-none transition-all"
+                      placeholder="Add a brief note about the stream..."
+                      value={newLiveLink.description}
+                      onChange={e => setNewLiveLink({...newLiveLink, description: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Display Order</label>
+                    <input 
+                      type="number"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-xs focus:border-neon-blue outline-none transition-all"
+                      value={newLiveLink.order}
+                      onChange={e => setNewLiveLink({...newLiveLink, order: parseInt(e.target.value) || 0})}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  type="submit"
+                  disabled={!!processingId}
+                  className="w-full py-4 bg-neon-blue text-black font-black rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.3)] hover:brightness-110 active:scale-95 transition-all uppercase tracking-widest flex items-center justify-center gap-3"
+                >
+                  {processingId === 'add-live-link' ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />}
+                  ADD LIVE BROADCAST LINK
+                </button>
+              </form>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <AnimatePresence>
+                {liveLinks.map((link) => (
+                  <motion.div
+                    key={link.id}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="glass-card p-5 border border-white/5 hover:border-neon-blue/20 transition-all flex flex-col gap-4 group"
+                  >
+                    <div className="flex justify-between items-center mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-neon-red/10 rounded-lg text-neon-red">
+                          <Youtube size={20} />
+                        </div>
+                        {link.team1Id && link.team2Id && (
+                          <div className="flex -space-x-2">
+                             <div className="w-8 h-8 rounded-full border-2 border-black bg-black overflow-hidden p-0.5">
+                                <ImageWithFallback src={link.team1Logo} alt="T1" className="w-full h-full object-contain" />
+                             </div>
+                             <div className="w-8 h-8 rounded-full border-2 border-black bg-black overflow-hidden p-0.5">
+                                <ImageWithFallback src={link.team2Logo} alt="T2" className="w-full h-full object-contain" />
+                             </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                         <span className="text-[10px] font-black bg-white/5 px-2 py-1 rounded text-gray-500 flex items-center gap-1 border border-white/5">
+                           <TrendingUp size={10} /> {link.order}
+                         </span>
+                         {confirmLiveDeleteId === link.id ? (
+                           <div className="flex items-center gap-1">
+                             <button 
+                               onClick={() => handleDeleteLiveLink(link.id)}
+                               disabled={processingId === link.id}
+                               className="px-2 py-1 bg-neon-red text-white text-[10px] font-black uppercase rounded hover:brightness-110 transition-all shadow-[0_0_10px_rgba(255,46,99,0.3)]"
+                             >
+                               {processingId === link.id ? '...' : 'YES'}
+                             </button>
+                             <button 
+                               onClick={() => setConfirmLiveDeleteId(null)}
+                               className="px-2 py-1 bg-white/10 text-gray-400 text-[10px] font-black uppercase rounded hover:bg-white/20 transition-all"
+                             >
+                               NO
+                             </button>
+                           </div>
+                         ) : (
+                           <button 
+                            onClick={() => setConfirmLiveDeleteId(link.id)}
+                            className="p-2 text-gray-500 hover:text-neon-red hover:bg-neon-red/10 rounded-lg transition-all border border-transparent hover:border-neon-red/50"
+                          >
+                            <Trash size={16} />
+                          </button>
+                         )}
+                      </div>
+                    </div>
+
+                    {link.thumbnailUrl ? (
+                      <div className="aspect-video w-full rounded-lg overflow-hidden border border-white/10 relative group-hover:border-neon-blue/40 transition-all">
+                        <ImageWithFallback src={link.thumbnailUrl} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                           <Youtube size={32} className="text-neon-red drop-shadow-[0_0_10px_rgba(255,46,99,0.8)]" />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="aspect-video w-full rounded-lg bg-black/40 border border-white/5 flex items-center justify-center">
+                        <Youtube size={32} className="text-white/5" />
+                      </div>
+                    )}
+
+                    <div className="space-y-1">
+                      <h3 className="font-black text-white group-hover:text-neon-blue transition-colors uppercase leading-tight">{link.title}</h3>
+                      {link.description && <p className="text-[10px] text-gray-500 font-bold leading-relaxed">{link.description}</p>}
+                    </div>
+
+                    <div className="mt-auto pt-4 border-t border-white/5">
+                      <a 
+                        href={link.url} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="text-[10px] font-mono text-neon-blue flex items-center gap-2 hover:underline break-all"
+                      >
+                        <Bot size={12} /> {link.url}
+                      </a>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+
+            {liveLinks.length === 0 && (
+              <div className="glass-card p-20 text-center space-y-4">
+                <Youtube size={48} className="mx-auto text-gray-700" />
+                <p className="text-gray-500 font-bold uppercase tracking-widest leading-none">No live links directory configured</p>
+                <p className="text-[10px] text-gray-600">Links added here will appear on the Home Page and Live Section</p>
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -3454,6 +3867,9 @@ const Admin: React.FC = () => {
                                 { id: 'transactions', name: 'Logs' },
                                 { id: 'seasons', name: 'Seasons' },
                                 { id: 'schedules', name: 'Schedule' },
+                                { id: 'live-links', name: 'Live' },
+                                { id: 'logo-update', name: 'Logos' },
+                                { id: 'settings', name: 'Config' },
                                 { id: 'ai', name: 'AI Helper' },
                                 { id: 'form-builder', name: 'Forms' }
                               ].map(perm => {
@@ -3611,6 +4027,89 @@ const Admin: React.FC = () => {
             className="w-full"
           >
             <SeasonsAdmin />
+          </motion.div>
+        )}
+
+        {activeTab === 'logo-update' && (
+          <motion.div
+            key="logo-update"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            className="space-y-6"
+          >
+            <div className="glass-card p-6 border border-white/10 space-y-6">
+              <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+                  <button 
+                    onClick={() => setLogoTargetType('teams')}
+                    className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${logoTargetType === 'teams' ? 'bg-neon-blue text-black' : 'text-gray-500'}`}
+                  >
+                    Teams
+                  </button>
+                  <button 
+                    onClick={() => setLogoTargetType('users')}
+                    className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${logoTargetType === 'users' ? 'bg-neon-blue text-black' : 'text-gray-500'}`}
+                  >
+                    Users
+                  </button>
+                </div>
+                <div className="relative flex-1 max-w-md w-full">
+                  <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input 
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 pl-12 text-sm focus:border-neon-blue transition-all"
+                    placeholder={`Search ${logoTargetType}...`}
+                    value={logoSearchTerm}
+                    onChange={e => setLogoSearchTerm(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4">
+                {(logoTargetType === 'teams' ? teams : allUsers)
+                  .filter(item => {
+                    const search = logoSearchTerm.toLowerCase();
+                    if (logoTargetType === 'teams') {
+                      return (item as Team).teamName.toLowerCase().includes(search) || (item as Team).leaderName.toLowerCase().includes(search);
+                    } else {
+                      return (item as any).email?.toLowerCase().includes(search) || (item as any).displayName?.toLowerCase().includes(search);
+                    }
+                  })
+                  .map(item => (
+                    <div key={item.id} className="glass-card p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 gaming-border-blue-sm">
+                      <div className="w-16 h-16 rounded-xl bg-black border border-white/10 p-1 shrink-0 mx-auto sm:mx-0">
+                        <ImageWithFallback 
+                          src={(item as any).logoUrl || ''} 
+                          className="w-full h-full object-cover rounded-lg" 
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0 w-full">
+                        <h4 className="text-sm font-black uppercase italic truncate text-center sm:text-left">
+                          {logoTargetType === 'teams' ? (item as Team).teamName : ((item as any).displayName || (item as any).email)}
+                        </h4>
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-2">
+                          <input 
+                            className="flex-1 bg-white/5 border border-white/10 rounded-lg p-2 text-[10px] font-mono text-gray-300 min-w-0"
+                            placeholder="New Logo URL..."
+                            defaultValue={(item as any).logoUrl || ''}
+                            id={`logo-input-${item.id}`}
+                          />
+                          <button 
+                            onClick={() => {
+                              const input = document.getElementById(`logo-input-${item.id}`) as HTMLInputElement;
+                              handleQuickLogoUpdate(item.id, logoTargetType, input.value);
+                            }}
+                            disabled={processingId === item.id}
+                            className="px-6 py-2 bg-neon-blue text-black text-[10px] font-black uppercase rounded-lg hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 whitespace-nowrap"
+                          >
+                            {processingId === item.id ? 'Saving...' : 'Update'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -4123,6 +4622,19 @@ const Admin: React.FC = () => {
                       </button>
                     </div>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-500 uppercase">Season</label>
+                  <select
+                    className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white"
+                    value={editingTeam.seasonId || ''}
+                    onChange={e => setEditingTeam({...editingTeam, seasonId: e.target.value})}
+                  >
+                    <option value="">No Season</option>
+                    {seasons.map(s => (
+                      <option key={s.id} value={s.id}>{s.name} ({s.status})</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">

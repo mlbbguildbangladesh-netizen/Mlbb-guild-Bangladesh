@@ -1,49 +1,133 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, Shield, Zap, Youtube, Facebook, ArrowRight, Calendar, Clock, Users, Timer, Swords, Sword, UserPlus, MessageCircle } from 'lucide-react';
+import { Trophy, Shield, Zap, Youtube, Facebook, ArrowRight, Calendar, Clock, Users, Timer, Swords, Sword, UserPlus, MessageCircle, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Team, Challenge, ScheduleMatch } from '../types';
+import { Team, Challenge, ScheduleMatch, LiveLink } from '../types';
 import CountdownTimer from '../components/CountdownTimer';
 import { FALLBACK_IMAGE, openExternalLink } from '../lib/utils';
 import { ImageWithFallback } from '../components/ImageWithFallback';
+import { LoadingIndicator } from '../components/LoadingComponents';
 
 const Home: React.FC = () => {
   const { settings } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [schedules, setSchedules] = useState<ScheduleMatch[]>([]);
+  const [liveLinks, setLiveLinks] = useState<LiveLink[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // We can just stop loading immediately or after a short delay so the user isn't stuck.
+    const timer = setTimeout(() => setLoading(false), 500);
+
     const teamsQuery = query(collection(db, 'teams'), where('registrationStatus', '==', 'approved'));
     const unsubscribeTeams = onSnapshot(teamsQuery, (snapshot) => {
       setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
+      setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'teams');
+      console.error("Teams listener error:", error);
     });
 
     const challengesQuery = collection(db, 'challenges');
     const unsubscribeChallenges = onSnapshot(challengesQuery, (snapshot) => {
       setChallenges(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Challenge)));
+      setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'challenges');
+      console.error("Challenges listener error:", error);
     });
 
     const schedulesQuery = collection(db, 'schedules');
     const unsubscribeSchedules = onSnapshot(schedulesQuery, (snapshot) => {
       setSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduleMatch)));
+      setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'schedules');
+      console.error("Schedules listener error:", error);
+    });
+
+    // Fetch approved registrations for activity feed
+    const registrationsQuery = query(collection(db, 'registrations'), where('status', '==', 'approved'));
+    const unsubscribeRegistrations = onSnapshot(registrationsQuery, (snapshot) => {
+      const regs = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          type: 'registration',
+          teamName: data.teamName,
+          timestamp: data.timestamp,
+          message: `Guild "${data.teamName}" has been successfully commissioned.`
+        };
+      });
+      setActivities(prev => {
+        const other = prev.filter(a => a.type !== 'registration');
+        return [...other, ...regs].sort((a, b) => {
+          const getT = (ts: any) => {
+            if (!ts) return 0;
+            if (ts.toMillis) return ts.toMillis();
+            if (ts instanceof Date) return ts.getTime();
+            const d = new Date(ts);
+            return isNaN(d.getTime()) ? 0 : d.getTime();
+          };
+          return getT(b.timestamp) - getT(a.timestamp);
+        }).slice(0, 5);
+      });
+      setLoading(false);
+    }, (error) => {
+      console.error("Registrations activity error:", error);
+    });
+
+    const liveLinksQuery = query(collection(db, 'live_links'), orderBy('order', 'asc'));
+    const unsubscribeLiveLinks = onSnapshot(liveLinksQuery, (snapshot) => {
+      setLiveLinks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LiveLink)));
+      setLoading(false);
+    }, (error) => {
+      console.error("Live links error:", error);
     });
 
     return () => {
+      clearTimeout(timer);
       unsubscribeTeams();
       unsubscribeChallenges();
       unsubscribeSchedules();
+      unsubscribeRegistrations();
+      unsubscribeLiveLinks();
     };
   }, []);
+
+  const recentEvents = useMemo(() => {
+    const events: any[] = [];
+    
+    // Process Schedules as activities
+    schedules.forEach(s => {
+      if (s.createdAt) {
+        events.push({
+          id: s.id,
+          type: 'match',
+          team1: s.team1Name,
+          team2: s.team2Name,
+          timestamp: s.createdAt,
+          message: `${s.matchType === 'challenge' ? 'BATTLE DEPLOYED' : 'OFFICIAL FIXTURE'}: ${s.team1Name} VS ${s.team2Name}`
+        });
+      }
+    });
+
+    // Merge with fetched activities
+    const combined = [...events, ...activities];
+    
+    return combined.sort((a, b) => {
+      const getT = (ts: any) => {
+        if (!ts) return 0;
+        if (ts.toMillis) return ts.toMillis();
+        if (ts instanceof Date) return ts.getTime();
+        const d = new Date(ts);
+        return isNaN(d.getTime()) ? 0 : d.getTime();
+      };
+      return getT(b.timestamp) - getT(a.timestamp);
+    }).slice(0, 10);
+  }, [schedules, activities]);
 
   const scheduledMatches = useMemo(() => {
     const matches: { teams: [Team, Team], time: string, date: string, bet: string, firstPickTeamId: string, firstPickName?: string }[] = [];
@@ -141,6 +225,14 @@ const Home: React.FC = () => {
     return list;
   }, [features, settings?.showSoloPlayers]);
 
+  if (loading) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center">
+        <LoadingIndicator message="Calibrating Arena..." />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-12 md:space-y-24 py-6 md:py-10">
       {/* Hero Section */}
@@ -200,6 +292,153 @@ const Home: React.FC = () => {
           </div>
         </section>
       )}
+
+      {/* Live Broadcast Section */}
+      {liveLinks.length > 0 && (
+        <section className="space-y-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-8 bg-neon-red shadow-[0_0_10px_rgba(255,0,60,0.5)]" />
+              <h2 className="text-2xl font-black uppercase tracking-tighter italic">
+                LIVE <span className="text-neon-red">BROADCASTS</span>
+              </h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-neon-red animate-ping" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-neon-red">OnAir Now</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {liveLinks.map((link, idx) => {
+              const thumbnailUrl = link.thumbnailUrl || (link.url.includes('youtube.com') || link.url.includes('youtu.be') ? `https://img.youtube.com/vi/${link.url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/)?.[2]}/maxresdefault.jpg` : null);
+              
+              return (
+              <motion.a
+                key={link.id}
+                href="#"
+                onClick={(e) => openExternalLink(e, link.url)}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.1 }}
+                className="glass-card group overflow-hidden border border-white/5 hover:border-neon-red/30 transition-all shadow-xl"
+              >
+                <div className="aspect-video bg-black/40 relative overflow-hidden">
+                   {/* Thumbnail or Team Logos Overlay */}
+                   {thumbnailUrl ? (
+                     <div className="absolute inset-0 z-0">
+                       <ImageWithFallback 
+                         src={thumbnailUrl} 
+                         alt={link.title} 
+                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-60 group-hover:opacity-40" 
+                       />
+                     </div>
+                   ) : link.team1Id && link.team2Id ? (
+                     <div className="absolute inset-0 z-0 flex items-center justify-around px-8 opacity-40 group-hover:opacity-60 transition-opacity">
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="w-16 h-16 rounded-full overflow-hidden border border-white/10 p-1 bg-black/40">
+                            <ImageWithFallback src={link.team1Logo} alt={link.team1Name || 'Team 1'} className="w-full h-full object-contain" />
+                          </div>
+                          <span className="text-[10px] font-black text-white uppercase truncate max-w-[80px]">{link.team1Name}</span>
+                        </div>
+                        <div className="text-neon-blue font-black italic text-xl">VS</div>
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="w-16 h-16 rounded-full overflow-hidden border border-white/10 p-1 bg-black/40">
+                            <ImageWithFallback src={link.team2Logo} alt={link.team2Name || 'Team 2'} className="w-full h-full object-contain" />
+                          </div>
+                          <span className="text-[10px] font-black text-white uppercase truncate max-w-[80px]">{link.team2Name}</span>
+                        </div>
+                     </div>
+                   ) : (
+                     <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=1000')] bg-cover bg-center opacity-20" />
+                   )}
+
+                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent z-10" />
+                   <div className="absolute inset-0 flex items-center justify-center group-hover:scale-110 transition-transform duration-500 z-20">
+                      <div className="w-16 h-16 rounded-full bg-neon-red/20 flex items-center justify-center border border-neon-red/40 group-hover:bg-neon-red group-hover:text-black transition-all shadow-[0_0_20px_rgba(255,46,99,0.3)]">
+                        <Youtube size={32} />
+                      </div>
+                   </div>
+                   {/* Badge */}
+                   <div className="absolute top-4 left-4 z-20 px-2 py-1 bg-neon-red text-white text-[8px] font-black rounded uppercase tracking-widest shadow-[0_0_10px_rgba(255,46,99,0.5)]">
+                     Match {idx + 1}
+                   </div>
+                </div>
+                <div className="p-5 space-y-2 relative">
+                   <h3 className="font-black text-lg text-white group-hover:text-neon-red transition-colors uppercase italic truncate">
+                     {link.title}
+                   </h3>
+                   <p className="text-[10px] text-gray-500 font-bold leading-relaxed line-clamp-2">
+                     {link.description || 'Watch the live tactical objective execution of MGB tournament matches.'}
+                   </p>
+                   <div className="pt-3 flex items-center justify-between">
+                     <span className="text-[9px] font-black text-neon-red uppercase tracking-widest flex items-center gap-2">
+                       <TrendingUp size={12} /> Watch Now
+                     </span>
+                     <ArrowRight size={14} className="text-gray-600 group-hover:translate-x-2 group-hover:text-neon-red transition-all" />
+                   </div>
+                </div>
+              </motion.a>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Activity Feed */}
+      <section className="space-y-8">
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-8 bg-neon-blue shadow-[0_0_10px_rgba(0,229,255,0.5)]" />
+          <h2 className="text-2xl font-black uppercase tracking-tighter italic">
+            TACTICAL <span className="text-neon-blue">FEED</span>
+          </h2>
+        </div>
+
+        <div className="grid gap-4">
+          {recentEvents.map((event, idx) => (
+            <motion.div
+              key={event.id}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: idx * 0.1 }}
+              className="glass-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-2 border-neon-blue/30 group hover:border-neon-blue transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className={`p-2 rounded-lg bg-white/5 border border-white/10 ${event.type === 'match' ? 'text-neon-red' : 'text-neon-green'}`}>
+                  {event.type === 'match' ? <Swords size={20} /> : <Shield size={20} />}
+                </div>
+                <div>
+                  <p className="text-xs md:text-sm font-bold uppercase tracking-tight text-white group-hover:text-neon-blue transition-colors">
+                    {event.message}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Clock size={12} className="text-gray-600" />
+                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                      {(() => {
+                        const ts = event.timestamp;
+                        if (!ts) return 'TBD';
+                        const date = ts.toMillis ? new Date(ts.toMillis()) : new Date(ts);
+                        return isNaN(date.getTime()) ? 'TBD' : date.toLocaleString();
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <span className="px-3 py-1 rounded-full bg-white/5 text-[8px] font-black uppercase tracking-[0.2em] text-gray-400 group-hover:text-neon-blue transition-colors">
+                  {event.type}
+                </span>
+              </div>
+            </motion.div>
+          ))}
+          {recentEvents.length === 0 && (
+            <div className="p-12 glass-card text-center text-gray-500 uppercase tracking-[0.3em] text-[10px] italic">
+              Awaiting tactical developments...
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Features Grid */}
       {settings?.showFeaturesSection !== false && (

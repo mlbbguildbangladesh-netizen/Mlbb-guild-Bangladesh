@@ -16,13 +16,23 @@ export const storage = getStorage(app);
 
 // CRITICAL CONSTRAINT: Test connection on boot
 async function testConnection() {
+  console.log("Starting Firestore connection test...");
   try {
+    // Try to reach the server specifically
     await getDocFromServer(doc(db, 'test', 'connection'));
-    console.log("Firestore connection successful");
+    console.log("Firestore connection test: SUCCESS (reachable)");
   } catch (error) {
     if (error instanceof Error) {
+      console.error("Firestore connection test: FAILURE", {
+        message: error.message,
+        code: (error as any).code,
+        projectId: firebaseConfig.projectId,
+        databaseId: firebaseConfig.firestoreDatabaseId
+      });
+      
       if (error.message.includes('the client is offline') || error.message.includes('unavailable')) {
-        console.error("Firestore connection failure: Please check your Firebase project and billing settings at https://console.firebase.google.com/project/" + firebaseConfig.projectId + "/firestore");
+        console.warn("Retrying Firestore connection in 5s (potential transient network issue)...");
+        setTimeout(testConnection, 5000);
       }
     }
   }

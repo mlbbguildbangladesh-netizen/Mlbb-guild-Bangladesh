@@ -1,7 +1,7 @@
 export type Role = 'admin' | 'team';
 export type RegistrationStatus = 'pending' | 'approved' | 'rejected';
 export type MatchResultType = 'win' | 'loss' | 'walkout' | 'rematch';
-export type TransactionType = 'win' | 'loss' | 'bonus' | 'shop' | 'penalty';
+export type TransactionType = 'win' | 'loss' | 'bonus' | 'shop' | 'penalty' | 'expense';
 
 export interface FormFieldSetting {
   id: string;
@@ -180,6 +180,22 @@ export interface RecruitmentRequest {
   createdAt: any;
 }
 
+export interface LiveLink {
+  id: string;
+  title: string;
+  url: string;
+  description?: string;
+  thumbnailUrl?: string;
+  team1Id?: string;
+  team2Id?: string;
+  team1Name?: string;
+  team2Name?: string;
+  team1Logo?: string;
+  team2Logo?: string;
+  order: number;
+  createdAt: any;
+}
+
 export interface AppSetting {
   id: string;
   currentSeasonId?: string;
@@ -219,6 +235,7 @@ export interface AppSetting {
   features?: { title: string; icon: string; desc: string; enabled: boolean }[];
   playerEditsLocked?: boolean;
   authorizedRecruiters?: string[];
+  moderatorPermissions?: Record<string, string[]>;
   adminUids?: string[];
   moderators?: {
     uid: string;

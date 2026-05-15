@@ -188,6 +188,26 @@
       },
       "required": ["userId", "title", "message", "type", "read", "createdAt"]
     },
+    "LiveLink": {
+      "title": "LiveLink",
+      "description": "Live match broadcast links",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "url": { "type": "string" },
+        "description": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "team1Id": { "type": "string" },
+        "team2Id": { "type": "string" },
+        "team1Name": { "type": "string" },
+        "team2Name": { "type": "string" },
+        "team1Logo": { "type": "string" },
+        "team2Logo": { "type": "string" },
+        "order": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "url", "order", "createdAt"]
+    },
     "AppSetting": {
       "title": "AppSetting",
       "description": "Global app settings",
@@ -247,6 +267,10 @@
     "/notifications/{notificationId}": {
       "schema": "Notification",
       "description": "User notifications"
+    },
+    "/live_links/{linkId}": {
+      "schema": "LiveLink",
+      "description": "Live match broadcast links"
     },
     "/settings/{settingId}": {
       "schema": "AppSetting",

@@ -207,7 +207,8 @@ const Registration: React.FC = () => {
       });
 
       if (duplicates.length > 0) {
-        setError("Duplicate player UIDs found in your team roster.");
+        const firstDup = playersRaw[duplicates[0]];
+        setError(`Registration Error: Duplicate player UID ${firstDup} found in your team roster.`);
         setErrorFields([...new Set(duplicates)]);
         setLoading(false);
         return;
@@ -227,7 +228,7 @@ const Registration: React.FC = () => {
           const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
           if (conflictIdx !== -1) setErrorFields([conflictIdx]);
           
-          setError(`This player (${matchedUid}) is already registered on ${teamName}.`);
+          setError(`Conflict Detected: Player UID ${matchedUid} is already registered on active team "${teamName}".`);
           setLoading(false);
           return;
         }
@@ -249,7 +250,7 @@ const Registration: React.FC = () => {
             const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
             if (conflictIdx !== -1) setErrorFields([conflictIdx]);
   
-            setError(`Player UID ${matchedUid} is already in a pending registration for team "${teamName}".`);
+            setError(`Conflict Detected: Player UID ${matchedUid} is already in a pending registration for team "${teamName}".`);
             setLoading(false);
             return;
           }
@@ -625,6 +626,7 @@ const Registration: React.FC = () => {
                   teamName: '',
                   leaderName: '',
                   leaderEmail: '',
+                  phoneNumber: '',
                   players: ['', '', '', '', '', '', ''],
                   type: 'new',
                   logoUrl: '',

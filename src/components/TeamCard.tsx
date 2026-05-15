@@ -1,5 +1,5 @@
 import React, { forwardRef } from 'react';
-import { Trophy, Users } from 'lucide-react';
+import { Trophy, Users, BarChart3 } from 'lucide-react';
 import { Team } from '../types';
 import { FALLBACK_IMAGE } from '../lib/utils';
 import { ImageWithFallback } from './ImageWithFallback';
@@ -7,9 +7,10 @@ import { ImageWithFallback } from './ImageWithFallback';
 interface TeamCardProps {
   team: Partial<Team>;
   showUniqueId?: boolean;
+  onClickStats?: () => void;
 }
 
-export const TeamCard = forwardRef<HTMLDivElement, TeamCardProps>(({ team, showUniqueId = true }, ref) => {
+export const TeamCard = forwardRef<HTMLDivElement, TeamCardProps>(({ team, showUniqueId = true, onClickStats }, ref) => {
   return (
     <div className="w-full flex justify-center">
       <div 
@@ -20,6 +21,20 @@ export const TeamCard = forwardRef<HTMLDivElement, TeamCardProps>(({ team, showU
           <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:20px_20px]" />
         </div>
         <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-br from-neon-blue/20 to-transparent pointer-events-none" />
+        
+        {onClickStats && (
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              onClickStats();
+            }}
+            className="absolute top-3 right-3 z-20 p-1.5 sm:p-2 bg-black/40 backdrop-blur-sm border border-neon-blue/30 rounded-lg text-neon-blue hover:bg-neon-blue hover:text-black transition-all flex items-center justify-center gap-1.5 group shadow-[0_0_15px_rgba(0,255,255,0.2)]"
+            title="View Statistics"
+          >
+            <BarChart3 size={14} className="sm:w-4 sm:h-4" />
+            <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest hidden sm:inline-block">STATS</span>
+          </button>
+        )}
         
         <div className="relative z-10 w-16 h-16 sm:w-24 sm:h-24 flex-shrink-0 bg-white/5 border border-white/10 rounded-xl overflow-hidden">
           {team.logoUrl ? (

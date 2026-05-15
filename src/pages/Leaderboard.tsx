@@ -11,6 +11,7 @@ import { ImageWithFallback } from '../components/ImageWithFallback';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { handleFirestoreError, OperationType } from '../lib/firebase';
+import { TableRowSkeleton } from '../components/LoadingComponents';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -30,6 +31,7 @@ const Leaderboard: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
   useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 500);
     // Only subscribe to all teams. Sorting is handled on the client.
     const q = query(
       collection(db, 'teams')
@@ -44,10 +46,9 @@ const Leaderboard: React.FC = () => {
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'teams');
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => { clearTimeout(timer); unsubscribe(); };
   }, []);
 
   const filteredTeams = teams
@@ -118,9 +119,9 @@ const Leaderboard: React.FC = () => {
       </div>
 
       {loading ? (
-        <div className="grid gap-4">
-          {[1, 2, 3, 4, 5].map(i => (
-            <div key={i} className="h-20 bg-white/5 animate-pulse rounded-xl" />
+        <div className="glass-card gaming-border-blue overflow-hidden divide-y divide-white/5">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <TableRowSkeleton key={i} />
           ))}
         </div>
       ) : (

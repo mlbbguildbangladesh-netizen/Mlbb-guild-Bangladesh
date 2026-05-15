@@ -3,30 +3,59 @@ import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Team } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Users, Diamond, Trophy, ChevronRight, X, Edit2 } from 'lucide-react';
+import { Shield, Users, Diamond, Trophy, ChevronRight, X, Edit2, BarChart3, TrendingUp, Zap, Target, Star } from 'lucide-react';
 import { TeamCard } from '../components/TeamCard';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { FALLBACK_IMAGE } from '../lib/utils';
 import { ImageWithFallback } from '../components/ImageWithFallback';
+import { ScheduleMatch } from '../types';
+import { ListSkeleton } from '../components/LoadingComponents';
 
 const Teams: React.FC = () => {
   const { isAdmin } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
+  const [matches, setMatches] = useState<ScheduleMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+  const [showStatsForTeam, setShowStatsForTeam] = useState<Team | null>(null);
 
   useEffect(() => {
-    const q = query(collection(db, 'teams'), orderBy('teamName'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const timer = setTimeout(() => setLoading(false), 500);
+    const qTeams = query(collection(db, 'teams'), orderBy('teamName'));
+    const unsubscribeTeams = onSnapshot(qTeams, (snapshot) => {
       setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Team));
       setLoading(false);
-    }, (error) => {
-      console.error("Teams Snapshot Error:", error);
-      setLoading(false);
     });
-    return () => unsubscribe();
+
+    const qMatches = query(collection(db, 'schedules'), orderBy('date', 'desc'));
+    const unsubscribeMatches = onSnapshot(qMatches, (snapshot) => {
+      setMatches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as ScheduleMatch));
+    });
+
+    return () => {
+      clearTimeout(timer);
+      unsubscribeTeams();
+      unsubscribeMatches();
+    };
   }, []);
+
+  const getTeamStats = (teamId: string) => {
+    const teamMatches = matches.filter(m => 
+      m.status === 'completed' && (m.team1Id === teamId || m.team2Id === teamId)
+    );
+    
+    const wins = teamMatches.filter(m => m.matchDetails?.winnerId === teamId).length;
+    const losses = teamMatches.length - wins;
+    const winRate = teamMatches.length > 0 ? Math.round((wins / teamMatches.length) * 100) : 0;
+    
+    return {
+      total: teamMatches.length,
+      wins,
+      losses,
+      winRate
+    };
+  };
 
   return (
     <div className="py-10 space-y-10">
@@ -57,18 +86,127 @@ const Teams: React.FC = () => {
               >
                 <X size={20} />
               </button>
-              <TeamCard team={selectedTeam} showUniqueId={isAdmin} />
+              <TeamCard 
+                team={selectedTeam} 
+                showUniqueId={isAdmin} 
+                onClickStats={() => {
+                  setShowStatsForTeam(selectedTeam);
+                  setSelectedTeam(null);
+                }} 
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showStatsForTeam && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl"
+            onClick={() => setShowStatsForTeam(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 30 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 30 }}
+              className="relative w-full max-w-2xl bg-neutral-900 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl p-8 sm:p-12"
+              onClick={e => e.stopPropagation()}
+            >
+              <button 
+                onClick={() => setShowStatsForTeam(null)}
+                className="absolute top-6 right-6 p-2 text-gray-500 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+
+              <div className="flex flex-col sm:flex-row items-center gap-6 mb-12">
+                <div className="w-24 h-24 rounded-3xl bg-black border border-white/10 p-2 shadow-xl shrink-0">
+                  <ImageWithFallback 
+                    src={showStatsForTeam.logoUrl || ''} 
+                    className="w-full h-full object-cover rounded-2xl" 
+                  />
+                </div>
+                <div className="text-center sm:text-left">
+                  <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white">
+                    {showStatsForTeam.teamName} <span className="text-neon-blue italic">ANALYTICS</span>
+                  </h2>
+                  <div className="flex items-center justify-center sm:justify-start gap-4 mt-2">
+                    <span className="flex items-center gap-1.5 text-xs font-black text-gray-500 uppercase tracking-widest">
+                      <Star size={12} className="text-neon-cyan" />
+                      Season Tier: {showStatsForTeam.points > 1000 ? 'Elite' : 'Gold'}
+                    </span>
+                    <span className="flex items-center gap-1.5 text-xs font-black text-gray-500 uppercase tracking-widest border-l border-white/10 pl-4">
+                      <TrendingUp size={12} className="text-neon-blue" />
+                      Streak: {showStatsForTeam.streak || 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+                {[
+                  { label: "Matches", value: getTeamStats(showStatsForTeam.id).total, icon: Zap, color: "text-blue-500" },
+                  { label: "Wins", value: getTeamStats(showStatsForTeam.id).wins, icon: Trophy, color: "text-amber-500" },
+                  { label: "Win Rate", value: `${getTeamStats(showStatsForTeam.id).winRate}%`, icon: Target, color: "text-neon-cyan" },
+                  { label: "Points", value: showStatsForTeam.points, icon: Star, color: "text-neon-blue" }
+                ].map((stat, i) => (
+                  <div key={i} className="bg-white/5 border border-white/10 rounded-3xl p-6 text-center group hover:bg-white/[0.08] transition-all">
+                    <stat.icon size={20} className={`${stat.color} mx-auto mb-3`} />
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{stat.label}</p>
+                    <p className="text-2xl font-black text-white italic">{stat.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-6">
+                <h3 className="text-xs font-black uppercase tracking-[0.3em] text-gray-500 flex items-center gap-3">
+                  <span className="h-px bg-white/10 flex-1" />
+                  Performance Metrics
+                  <span className="h-px bg-white/10 flex-1" />
+                </h3>
+                
+                <div className="space-y-5">
+                  {[
+                    { label: "Competitive Standing", value: showStatsForTeam.points > 2000 ? 95 : 75 },
+                    { label: "Execution Efficiency", value: 85 },
+                    { label: "Team Synergy", value: 90 }
+                  ].map((metric, i) => (
+                    <div key={i} className="space-y-2">
+                      <div className="flex justify-between text-[10px] font-black uppercase tracking-widest mb-1">
+                        <span className="text-gray-400">{metric.label}</span>
+                        <span className="text-neon-blue">{metric.value}%</span>
+                      </div>
+                      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${metric.value}%` }}
+                          transition={{ delay: 0.5 + (i * 0.1), duration: 1 }}
+                          className="h-full bg-gradient-to-r from-neon-blue to-neon-cyan rounded-full shadow-[0_0_10px_rgba(0,255,255,0.3)]"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-12 pt-8 border-t border-white/5 flex justify-center">
+                <button 
+                  onClick={() => setShowStatsForTeam(null)}
+                  className="px-8 py-3 bg-neon-blue text-black font-black uppercase italic tracking-tighter rounded-xl hover:scale-105 transition-transform"
+                >
+                  Close Analytics
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
       {loading ? (
-        <div className="space-y-4">
-          {[1,2,3,4,5,6,7].map(i => (
-            <div key={i} className="h-24 bg-white/5 animate-pulse rounded-2xl" />
-          ))}
-        </div>
+        <ListSkeleton />
       ) : (
         <div className="bg-black/40 border border-white/5 rounded-2xl divide-y divide-white/5 overflow-hidden">
           {teams.map((team, idx) => (

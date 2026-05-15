@@ -6,11 +6,13 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { updateEmail } from 'firebase/auth';
 import { Team } from '../types';
 import { motion } from 'framer-motion';
-import { Shield, User, Camera, Save, Loader2, AlertCircle, CheckCircle, Users, Mail, Send, RefreshCw, Lock } from 'lucide-react';
+import { Shield, User, Camera, Save, Loader2, AlertCircle, CheckCircle, Users, Mail, Send, RefreshCw, Lock, History, Clock } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 import { ImageWithFallback } from '../components/ImageWithFallback';
 import { FALLBACK_IMAGE, RANKS, getRankBonus, uploadExternalImageToStorage } from '../lib/utils';
 import { useSearchParams, Link } from 'react-router-dom';
+import { Transaction } from '../types';
+import { orderBy, limit, onSnapshot } from 'firebase/firestore';
 
 const Profile: React.FC = () => {
   const { user, isAdmin, settings } = useAuth();
@@ -18,6 +20,7 @@ const Profile: React.FC = () => {
   const targetId = searchParams.get('id') || (isAdmin ? null : user?.id);
 
   const [team, setTeam] = useState<Team | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [pendingRegistration, setPendingRegistration] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -44,6 +47,8 @@ const Profile: React.FC = () => {
   const [previews, setPreviews] = useState<{ logo?: string, card?: string }>({});
 
   useEffect(() => {
+    let unsubscribeTransactions: any = () => {};
+
     const fetchTeam = async () => {
       if (!targetId) {
         setLoading(false);
@@ -95,6 +100,19 @@ const Profile: React.FC = () => {
         if (teamDoc && teamDoc.exists()) {
           const teamData = { id: teamDoc.id, ...teamDoc.data() } as Team;
           setTeam(teamData);
+
+          // Setup transaction listener
+          const transQuery = query(
+            collection(db, 'transactions'),
+            where('teamId', '==', teamDoc.id),
+            orderBy('timestamp', 'desc'),
+            limit(10)
+          );
+          unsubscribeTransactions = onSnapshot(transQuery, (snapshot) => {
+            setTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)));
+          }, (err) => {
+            console.error("Trans history error:", err);
+          });
           
           let recordEmail = '';
           const ownerId = teamData.ownerId || teamDoc.id;
@@ -136,6 +154,7 @@ const Profile: React.FC = () => {
     };
 
     fetchTeam();
+    return () => unsubscribeTransactions();
   }, [targetId, isAdmin, searchParams]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -237,7 +256,8 @@ const Profile: React.FC = () => {
       });
 
       if (duplicates.length > 0) {
-        setError("Duplicate player UIDs found in your team roster.");
+        const firstDup = playersRaw[duplicates[0]];
+        setError(`Update Error: Duplicate player UID ${firstDup} found in your team roster.`);
         setErrorFields([...new Set(duplicates)]);
         setSaving(false);
         return;
@@ -259,7 +279,7 @@ const Profile: React.FC = () => {
           const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
           if (conflictIdx !== -1) setErrorFields([conflictIdx]);
 
-          setError(`This player (${matchedUid}) is already registered on ${teamName}.`);
+          setError(`Conflict Detected: Player UID ${matchedUid} is already registered on active team "${teamName}".`);
           setSaving(false);
           return;
         }
@@ -280,7 +300,7 @@ const Profile: React.FC = () => {
           const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
           if (conflictIdx !== -1) setErrorFields([conflictIdx]);
 
-          setError(`Player UID ${matchedUid} is already in a pending registration for team "${teamName}".`);
+          setError(`Conflict Detected: Player UID ${matchedUid} is already in a pending registration for team "${teamName}".`);
           setSaving(false);
           return;
         }
@@ -617,6 +637,57 @@ const Profile: React.FC = () => {
           </div>
         )}
       </div>
+
+      {transactions.length > 0 && (
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <History className="text-neon-blue" size={20} />
+            <h2 className="text-xl font-black uppercase italic tracking-tighter">ACTION <span className="text-neon-blue">HISTORY</span></h2>
+          </div>
+          <div className="grid gap-3">
+            {transactions.map((t, idx) => (
+              <motion.div
+                key={t.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.05 }}
+                className="glass-card p-4 flex items-center justify-between border-l-2 border-neon-blue/30"
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                    t.type === 'win' || t.type === 'bonus' ? 'bg-green-500/10 text-green-500 border border-green-500/20' : 
+                    t.type === 'penalty' || t.type === 'expense' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
+                    'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+                  }`}>
+                    {t.type === 'win' || t.type === 'bonus' ? '+' : '-'}
+                  </div>
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-widest text-white">{t.reason}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <Clock size={10} className="text-gray-500" />
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                        {t.timestamp ? ((t.timestamp as any).toMillis ? new Date((t.timestamp as any).toMillis()).toLocaleString() : new Date(t.timestamp).toLocaleString()) : 'TBD'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  {t.points !== 0 && (
+                    <p className={`text-xs font-black italic ${t.points > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      {t.points > 0 ? '+' : ''}{t.points} PTS
+                    </p>
+                  )}
+                  {t.diamonds !== 0 && (
+                    <p className={`text-[10px] font-black italic ${t.diamonds > 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                      {t.diamonds > 0 ? '+' : ''}{t.diamonds} DIA
+                    </p>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <form onSubmit={handleSave} className="space-y-8">
         {error && (

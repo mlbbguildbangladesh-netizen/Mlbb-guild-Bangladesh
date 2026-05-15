@@ -316,7 +316,7 @@ async function startServer() {
 
   // API Route: Create User + Team
   app.post("/api/admin/create-user", verifyAdmin, async (req, res) => {
-    const { email, password, teamName, leaderName, players, logoUrl } = req.body;
+    const { email, password, teamName, leaderName, players, logoUrl, seasonId } = req.body;
     
     if (!email || !password || !teamName || !leaderName) {
       return res.status(400).json({ error: "Missing required fields (email, password, teamName, leaderName)" });
@@ -326,12 +326,21 @@ async function startServer() {
       // --- Player Uniqueness Check ---
       const playersList = (players || []).filter((p: string) => p && p.trim() !== '');
       if (playersList.length > 0) {
-        const teamsColl = getAdminDb().collection('teams');
+        const adminDb = getAdminDb();
+        const teamsColl = adminDb.collection('teams');
         const conflictQuery = await teamsColl.where('players', 'array-contains-any', playersList).limit(1).get();
         if (!conflictQuery.empty) {
           const conflictingTeam = conflictQuery.docs[0].data();
           const matchedUid = playersList.find((uid: string) => (conflictingTeam.players as string[]).includes(uid));
-          return res.status(400).json({ error: `Player UID ${matchedUid} is already registered on ${conflictingTeam.teamName}.` });
+          return res.status(400).json({ error: `Conflict Detected: Player UID ${matchedUid} is already registered on the active team "${conflictingTeam.teamName}".` });
+        }
+
+        const regColl = adminDb.collection('registrations');
+        const conflictRegQuery = await regColl.where('status', '==', 'pending').where('players', 'array-contains-any', playersList).limit(1).get();
+        if (!conflictRegQuery.empty) {
+          const conflictingReg = conflictRegQuery.docs[0].data();
+          const matchedUid = playersList.find((uid: string) => (conflictingReg.players as string[]).includes(uid));
+          return res.status(400).json({ error: `Conflict Detected: Player UID ${matchedUid} is already in a pending registration for team "${conflictingReg.teamName}".` });
         }
       }
 
@@ -374,6 +383,7 @@ async function startServer() {
         teamName,
         leaderName,
         ownerId: uid,
+        seasonId: seasonId || '',
         points: 0,
         diamonds: 0,
         streak: 0,

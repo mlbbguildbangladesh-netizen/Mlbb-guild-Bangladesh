@@ -38,6 +38,7 @@ import {
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { SoloPlayer, Team, RecruitmentRequest } from '../types';
 import toast from 'react-hot-toast';
+import { LoadingIndicator, GridSkeleton } from '../components/LoadingComponents';
 
 const ROLES = [
   'Tank',
@@ -101,6 +102,8 @@ export default function SoloPlayers() {
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('All');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('All');
+  const [timeSearchTerm, setTimeSearchTerm] = useState('');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -462,12 +465,21 @@ export default function SoloPlayers() {
       const matchesSearch = searchTerm === '' || 
                             (canView && (p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                                          p.gameId.toLowerCase().includes(searchTerm.toLowerCase())));
+      
       const matchesRole = selectedRoleFilter === 'All' || 
                           p.mainRole === selectedRoleFilter || 
                           p.subRoles.includes(selectedRoleFilter);
-      return matchesSearch && matchesRole;
+
+      const matchesStatus = selectedStatusFilter === 'All' || 
+                            (selectedStatusFilter === 'Active' && p.status !== 'booked') ||
+                            (selectedStatusFilter === 'Booked' && p.status === 'booked');
+
+      const matchesTime = timeSearchTerm === '' || 
+                          (p.activeTime && p.activeTime.toLowerCase().includes(timeSearchTerm.toLowerCase()));
+
+      return matchesSearch && matchesRole && matchesStatus && matchesTime;
     });
-  }, [players, searchTerm, selectedRoleFilter, canRecruit, user, activeTab]);
+  }, [players, searchTerm, selectedRoleFilter, selectedStatusFilter, timeSearchTerm, canRecruit, user, activeTab]);
 
   const filteredTeams = useMemo(() => {
     return teams.filter(t => t.registrationStatus === 'approved');
@@ -488,9 +500,8 @@ export default function SoloPlayers() {
 
   if (loading) {
      return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <div className="w-12 h-12 border-4 border-neon-blue border-t-transparent rounded-full animate-spin neon-glow-blue" />
-        <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] animate-pulse">Scanning Bio-Data...</p>
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <LoadingIndicator message="Scanning Bio-Data..." />
       </div>
     );
   }
@@ -620,34 +631,68 @@ export default function SoloPlayers() {
 
       {activeTab === 'hire' || activeTab === 'all' ? (
         <>
-          <div className="flex flex-col md:flex-row gap-6 items-center justify-between">
-            <div className="flex flex-wrap items-center gap-3">
-              <Filter size={18} className="text-neon-blue mr-2" />
-              {['All', ...ROLES].map(role => (
-                <button
-                  key={role}
-                  onClick={() => setSelectedRoleFilter(role)}
-                  className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border ${
-                    selectedRoleFilter === role 
-                    ? 'bg-neon-blue text-black border-neon-blue' 
-                    : 'bg-white/5 text-gray-500 border-white/10 hover:bg-white/10'
-                  }`}
-                >
-                  {role}
-                </button>
-              ))}
+          <div className="space-y-6">
+            {/* Row 1: Search and Roles */}
+            <div className="flex flex-col xl:flex-row gap-6 items-start xl:items-center justify-between">
+              <div className="flex flex-wrap items-center gap-3">
+                <Filter size={18} className="text-neon-blue mr-2" />
+                {['All', ...ROLES].map(role => (
+                  <button
+                    key={role}
+                    onClick={() => setSelectedRoleFilter(role)}
+                    className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border ${
+                      selectedRoleFilter === role 
+                      ? 'bg-neon-blue text-black border-neon-blue shadow-[0_0_15px_rgba(0,229,255,0.3)]' 
+                      : 'bg-white/5 text-gray-500 border-white/10 hover:bg-white/10 hover:border-white/20'
+                    }`}
+                  >
+                    {role}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative group w-full xl:w-96">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-neon-blue transition-colors" size={18} />
+                <input 
+                  type="text"
+                  placeholder={canRecruit ? "SEARCH NAME OR UID..." : "SEARCH RESTRICTED..."}
+                  disabled={!canRecruit}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-xs font-black uppercase tracking-widest focus:outline-none focus:border-neon-blue focus:bg-white/10 disabled:opacity-50 transition-all font-mono"
+                />
+              </div>
             </div>
 
-            <div className="relative group w-full md:w-80">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-neon-blue transition-colors" size={18} />
-              <input 
-                type="text"
-                placeholder={canRecruit ? "SEARCH BY NAME OR UID..." : "SEARCH RESTRICTED..."}
-                disabled={!canRecruit}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-xs font-black uppercase tracking-widest focus:outline-none focus:border-neon-blue/50 focus:bg-white/10 disabled:opacity-50 transition-all"
-              />
+            {/* Row 2: Status and Time filters */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex items-center gap-3 bg-white/5 p-2 rounded-xl border border-white/10">
+                <Shield size={16} className="text-gray-500 ml-2" />
+                {['All', 'Active', 'Booked'].map(status => (
+                  <button
+                    key={status}
+                    onClick={() => setSelectedStatusFilter(status)}
+                    className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-[0.2em] transition-all ${
+                      selectedStatusFilter === status
+                      ? 'bg-white/10 text-neon-blue'
+                      : 'text-gray-500 hover:text-white'
+                    }`}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative group flex-grow">
+                <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-neon-blue transition-colors" size={16} />
+                <input 
+                  type="text"
+                  placeholder="FILTER BY AVAILABILITY (e.g. 8 PM, Night, Evening)..."
+                  value={timeSearchTerm}
+                  onChange={(e) => setTimeSearchTerm(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-[10px] font-black uppercase tracking-widest focus:outline-none focus:border-neon-blue/50 focus:bg-white/10 transition-all"
+                />
+              </div>
             </div>
           </div>
 

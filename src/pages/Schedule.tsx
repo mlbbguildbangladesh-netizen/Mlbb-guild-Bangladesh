@@ -26,6 +26,7 @@ import {
 import { handleFirestoreError, OperationType } from '../lib/firebase';
 import CountdownTimer from '../components/CountdownTimer';
 import { ImageWithFallback } from '../components/ImageWithFallback';
+import { MatchCardSkeleton } from '../components/LoadingComponents';
 import { Link } from 'react-router-dom';
 
 const Schedule: React.FC = () => {
@@ -48,6 +49,9 @@ const Schedule: React.FC = () => {
   });
 
   useEffect(() => {
+    // Prevent infinite load if backend is slow
+    const timer = setTimeout(() => setLoading(false), 500);
+
     // Fetch Schedules
     const q = query(collection(db, 'schedules'), orderBy('date', 'asc'));
     const unsubscribeSchedules = onSnapshot(q, (snapshot) => {
@@ -56,7 +60,6 @@ const Schedule: React.FC = () => {
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'schedules');
-      setLoading(false);
     });
 
     const teamsQuery = query(collection(db, 'teams'), where('registrationStatus', '==', 'approved'));
@@ -74,6 +77,7 @@ const Schedule: React.FC = () => {
     });
 
     return () => {
+      clearTimeout(timer);
       unsubscribeSchedules();
       unsubscribeTeams();
       unsubscribeChallenges();
@@ -81,7 +85,7 @@ const Schedule: React.FC = () => {
   }, []);
 
   const liveHighlights = useMemo(() => {
-    const highlights: { teams: [Team, Team], time: string, date: string, bet: string, firstPickTeamId: string, firstPickName?: string, isChallenge?: boolean }[] = [];
+    const highlights: { teams: [Team, Team], time: string, date: string, bet: string, firstPickTeamId: string, firstPickName?: string, isChallenge?: boolean, status: string }[] = [];
     const processed = new Set<string>();
 
     // 1. Mutual Challenges
@@ -115,7 +119,16 @@ const Schedule: React.FC = () => {
             if (firstPickTeamId === c1.fromTeamId) firstPickName = team1.teamName;
             else if (firstPickTeamId === targetId) firstPickName = team2.teamName;
 
-            highlights.push({ teams: [team1, team2], time, date, bet, firstPickTeamId, firstPickName, isChallenge: true });
+            highlights.push({ 
+              teams: [team1, team2], 
+              time, 
+              date, 
+              bet, 
+              firstPickTeamId, 
+              firstPickName, 
+              isChallenge: true,
+              status: 'upcoming' as const
+            });
             processed.add(matchKey);
           }
         }
@@ -133,7 +146,8 @@ const Schedule: React.FC = () => {
         bet: '0',
         firstPickTeamId: s.firstPick === s.team1Name ? s.team1Id || s.team1Name : s.firstPick === s.team2Name ? s.team2Id || s.team2Name : s.firstPick,
         firstPickName: s.firstPick,
-        isChallenge: s.matchType === 'challenge'
+        isChallenge: s.matchType === 'challenge',
+        status: s.status
       });
     });
 
@@ -401,9 +415,9 @@ const Schedule: React.FC = () => {
 
       {/* Matches List */}
       {loading ? (
-        <div className="space-y-4">
-          {[1, 2, 3, 4, 5].map(i => (
-            <div key={i} className="h-20 bg-white/5 animate-pulse rounded-xl border border-white/5" />
+        <div className="grid grid-cols-1 gap-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <MatchCardSkeleton key={i} />
           ))}
         </div>
       ) : filteredMatches.length === 0 ? (
@@ -483,6 +497,12 @@ const Schedule: React.FC = () => {
                       <p className="text-[10px] font-black text-gray-400 uppercase italic">{match.matchType || 'official'}</p>
                     </div>
                     <div className="flex items-center gap-2">
+                      <div className="text-right hidden xl:block mr-4">
+                        <p className="text-[8px] font-black text-neon-blue uppercase tracking-widest opacity-50">SCHEDULED AT</p>
+                        <p className="text-[10px] font-black text-gray-400 uppercase italic">
+                          {match.createdAt ? ((match.createdAt as any).toMillis ? new Date((match.createdAt as any).toMillis()).toLocaleString() : new Date(match.createdAt).toLocaleString()) : 'TBD'}
+                        </p>
+                      </div>
                       {isAdmin && (
                         <button
                           onClick={(e) => handleDeleteMatch(match.id, e)}

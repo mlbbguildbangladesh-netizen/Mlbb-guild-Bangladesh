@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { handleFirestoreError, OperationType } from '../lib/firebase';
 import { recordMatchResult } from '../lib/utils';
 import { ImageWithFallback } from './ImageWithFallback';
+import CountdownTimer from './CountdownTimer';
 import toast from 'react-hot-toast';
 
 export default function SchedulesAdmin() {
@@ -652,23 +653,6 @@ export default function SchedulesAdmin() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[...schedules].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(s => (
               <div key={s.id} className="bg-white/5 border border-white/10 p-4 rounded-xl relative group transition-all hover:border-white/20">
-                <div className="absolute top-2 right-2 flex items-center gap-1 z-30 pointer-events-auto">
-                  <button 
-                    type="button"
-                    onClick={() => { setEditingId(s.id); setEditMatch(s); }} 
-                    className="text-gray-400 hover:text-neon-blue p-2 bg-black/60 rounded-lg transition-all border border-white/10 hover:border-neon-blue/50 active:scale-95"
-                  >
-                    <Pencil size={14}/>
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => setDeleteConfirmId(s.id)} 
-                    className="text-gray-400 hover:text-neon-red p-2 bg-black/60 rounded-lg transition-all border border-white/10 hover:border-neon-red/50 active:scale-95"
-                  >
-                    <Trash size={14}/>
-                  </button>
-                </div>
-                
                 {editingId === s.id ? (
                   <div className="space-y-3">
                     <div className="flex gap-2">
@@ -714,17 +698,36 @@ export default function SchedulesAdmin() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center justify-between mb-4 pr-16">
-                      <span className={`text-[10px] font-black uppercase px-2 py-1 border rounded ${
-                        s.status === 'upcoming' ? 'bg-neon-blue/10 text-neon-blue border-neon-blue/20' :
-                        s.status === 'live' ? 'bg-neon-red/10 text-neon-red border-neon-red/20 animate-pulse' :
-                        s.status === 'completed' ? 'bg-neon-green/10 text-neon-green border-neon-green/20' :
-                        'bg-neon-red/10 text-neon-red border-neon-red/20'
-                      }`}>
-                        {s.status}
-                      </span>
-                      <div className="flex items-center gap-2 text-xs font-medium text-gray-400">
-                        <Calendar size={12} /> {s.date} <Clock size={12} /> {s.time}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <span className={`text-[10px] font-black uppercase px-2 py-1 border rounded ${
+                          s.status === 'upcoming' ? 'bg-neon-blue/10 text-neon-blue border-neon-blue/20' :
+                          s.status === 'live' ? 'bg-neon-red/10 text-neon-red border-neon-red/20 animate-pulse' :
+                          s.status === 'completed' ? 'bg-neon-green/10 text-neon-green border-neon-green/20' :
+                          'bg-neon-red/10 text-neon-red border-neon-red/20'
+                        }`}>
+                          {s.status}
+                        </span>
+                        <div className="flex items-center gap-2 text-xs font-medium text-gray-400">
+                          <Calendar size={12} /> {s.date} <Clock size={12} /> {s.time}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 z-30 pointer-events-auto">
+                        <button 
+                          type="button"
+                          onClick={() => { setEditingId(s.id); setEditMatch(s); }} 
+                          className="text-gray-400 hover:text-neon-blue p-1.5 bg-white/5 rounded-lg transition-all border border-white/10 hover:border-neon-blue/50 active:scale-95"
+                        >
+                          <Pencil size={12}/>
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => setDeleteConfirmId(s.id)} 
+                          className="text-gray-400 hover:text-neon-red p-1.5 bg-white/5 rounded-lg transition-all border border-white/10 hover:border-neon-red/50 active:scale-95"
+                        >
+                          <Trash size={12}/>
+                        </button>
                       </div>
                     </div>
                     
@@ -793,29 +796,47 @@ export default function SchedulesAdmin() {
                     </div>
 
                     <div className="mt-4 flex gap-2">
-                      <button 
-                        onClick={() => {
-                          setReportingMatch(s);
-                          setReportData({ 
-                            winnerId: s.matchDetails?.winnerId || '', 
-                            type: s.matchDetails?.resultType || 'win', 
-                            externalLink: '', 
-                            pointsA: s.matchDetails?.pointsExchanged?.team1 || 0, 
-                            pointsB: s.matchDetails?.pointsExchanged?.team2 || 0, 
-                            diamondsA: s.matchDetails?.diamondsExchanged?.team1 || 0, 
-                            diamondsB: s.matchDetails?.diamondsExchanged?.team2 || 0, 
-                            useManual: !!s.matchDetails 
-                          });
-                        }}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${
-                          s.status === 'completed' 
-                            ? 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/5' 
-                            : 'bg-neon-blue/10 text-neon-blue hover:bg-neon-blue hover:text-black border border-neon-blue/20'
-                        }`}
-                      >
-                        <Trophy size={14} />
-                        {s.status === 'completed' ? 'Update Report' : 'Report Result'}
-                      </button>
+                      {(() => {
+                        const matchDateTime = new Date(`${s.date}T${s.time}`).getTime();
+                        const now = Date.now();
+                        const isTimePassed = now >= matchDateTime;
+                        const canReport = s.status === 'completed' || isTimePassed;
+
+                        if (!canReport) {
+                          return (
+                            <div className="flex-1 py-2 px-3 rounded-lg bg-white/5 border border-white/10 text-[10px] font-black uppercase text-gray-600 text-center flex items-center justify-center gap-2">
+                              <Clock size={14} />
+                              Starts in <CountdownTimer date={s.date} time={s.time} compact />
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <button 
+                            onClick={() => {
+                              setReportingMatch(s);
+                              setReportData({ 
+                                winnerId: s.matchDetails?.winnerId || '', 
+                                type: s.matchDetails?.resultType || 'win', 
+                                externalLink: '', 
+                                pointsA: s.matchDetails?.pointsExchanged?.team1 || 0, 
+                                pointsB: s.matchDetails?.pointsExchanged?.team2 || 0, 
+                                diamondsA: s.matchDetails?.diamondsExchanged?.team1 || 0, 
+                                diamondsB: s.matchDetails?.diamondsExchanged?.team2 || 0, 
+                                useManual: !!s.matchDetails 
+                              });
+                            }}
+                            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${
+                              s.status === 'completed' 
+                                ? 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/5' 
+                                : 'bg-neon-blue/10 text-neon-blue hover:bg-neon-blue hover:text-black border border-neon-blue/20 shadow-[0_0_15px_rgba(0,229,255,0.2)]'
+                            }`}
+                          >
+                            <Trophy size={14} />
+                            {s.status === 'completed' ? 'Update Report' : 'Make Result'}
+                          </button>
+                        );
+                      })()}
                       
                       {s.status === 'upcoming' && (
                         <a 

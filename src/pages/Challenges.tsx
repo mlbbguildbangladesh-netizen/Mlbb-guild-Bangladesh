@@ -12,6 +12,7 @@ import {
   Search, 
   Filter,
   AlertTriangle,
+  AlertCircle,
   Flame,
   ArrowRight,
   LayoutDashboard,
@@ -148,12 +149,12 @@ const Challenges: React.FC = () => {
   }, [selectedDate, timePickerTeam, currentTeam]);
 
   useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 500);
     const unsubscribeTeams = onSnapshot(collection(db, 'teams'), (snapshot) => {
       setTeams(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
       setLoading(false);
     }, (error) => {
       console.error("Teams Snapshot Error:", error);
-      setLoading(false);
     });
 
     const unsubscribeChallenges = onSnapshot(collection(db, 'challenges'), (snapshot) => {
@@ -177,6 +178,7 @@ const Challenges: React.FC = () => {
     });
 
     return () => {
+      clearTimeout(timer);
       unsubscribeTeams();
       unsubscribeChallenges();
       unsubscribeSchedules();
@@ -273,7 +275,7 @@ const Challenges: React.FC = () => {
         bet: settings?.bettingEnabled ? (selectedBet || '') : ''
       };
 
-      if (selectedPick && selectedPick !== '') {
+      if (selectedPick) {
         details.sideSelection = selectedPick;
       }
 
@@ -391,11 +393,20 @@ const Challenges: React.FC = () => {
     }
   };
 
-  const filteredTeams = teams.filter(t => 
-    t.id !== currentTeam?.id && 
-    t.registrationStatus === 'approved' &&
-    t.teamName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const activeSeasonId = settings?.currentSeasonId;
+
+  const filteredTeams = teams.filter(t => {
+    if (t.id === currentTeam?.id) return false;
+    if (t.registrationStatus !== 'approved') return false;
+    if (!t.teamName.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+
+    if (activeSeasonId) {
+      if (currentTeam && currentTeam.seasonId !== activeSeasonId) return false;
+      if (t.seasonId !== activeSeasonId) return false;
+    }
+
+    return true;
+  });
 
   const matchedChallenges = useMemo(() => {
     const matches: { teamA: Team, teamB: Team, details: ChallengeDetails }[] = [];
@@ -501,6 +512,15 @@ const Challenges: React.FC = () => {
             </div>
 
             <div className="space-y-3">
+              {filteredTeams.length === 0 && (
+                 <div className="glass-card p-12 text-center flex flex-col items-center justify-center border-dashed border-white/20">
+                   <AlertCircle size={48} className="text-gray-500 mb-4" />
+                   <h3 className="text-xl font-black uppercase text-gray-300">No guilds available to challenge</h3>
+                   <p className="text-xs text-gray-500 mt-2 max-w-sm mx-auto">
+                      {settings?.currentSeasonId && currentTeam?.seasonId !== settings?.currentSeasonId ? "Your team is not registered for the current active season." : "There are currently no other guilds available or matching your search."}
+                   </p>
+                 </div>
+              )}
               {filteredTeams.map((team) => {
                 const isChallenged = (userChallenge?.targetTeamIds || []).includes(team.id);
                 return (

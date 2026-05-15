@@ -7,6 +7,8 @@ import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
+import { LoadingIndicator } from '../components/LoadingComponents';
+
 const SHOP_ITEMS = [
   {
     id: 'mlbb_weekly_pass',
@@ -58,8 +60,16 @@ const SHOP_ITEMS = [
 ];
 
 const Shop: React.FC = () => {
-  const { user, isAdmin, settings } = useAuth();
+  const { user, isAdmin, settings, loading } = useAuth();
   
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <LoadingIndicator message="Initializing Shop Protocol..." />
+      </div>
+    );
+  }
+
   if (settings?.showShop === false && !isAdmin) {
     return <Navigate to="/" replace />;
   }

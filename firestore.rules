@@ -85,7 +85,7 @@ service cloud.firestore {
 
       allow update: if (
         isSignedIn() && (
-          isStaff('users') || isStaff('matches') || (
+          isStaff('users') || isStaff('logo-update') || isStaff('matches') || (
             isOwner(userId) && 
             incoming().get('role', existing().role) == existing().role &&
             incoming().get('points', existing().get('points', 0)) == existing().get('points', 0) &&
@@ -104,7 +104,7 @@ service cloud.firestore {
       
       allow update: if (
         isSignedIn() && (
-          isStaff('teams') || isStaff('matches') || (
+          isStaff('teams') || isStaff('logo-update') || isStaff('matches') || (
             (isOwner(existing().get('ownerId', '')) || isOwner(teamId)) &&
             incoming().get('ownerId', existing().get('ownerId', '')) == existing().get('ownerId', '')
           ) || (
@@ -188,9 +188,14 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
+    match /live_links/{linkId} {
+      allow read, list: if true;
+      allow write: if isStaff('live-links');
+    }
+
     match /settings/{settingId} {
       allow read, list: if true;
-      allow write: if isAdmin();
+      allow write: if isStaff('settings');
     }
   }
 }
