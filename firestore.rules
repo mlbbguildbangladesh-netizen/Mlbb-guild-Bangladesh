@@ -14,7 +14,7 @@ service cloud.firestore {
     function isMasterAdmin() {
       return isSignedIn() && 
              request.auth.token.email != null && 
-             (request.auth.token.email == "mlbbguildbangladesh@gmail.com" || request.auth.token.email.lower() == "mlbbguildbangladesh@gmail.com");
+             (request.auth.token.email == "mlbbguildbangladesh@gmail.com" || request.auth.token.email.toLower() == "mlbbguildbangladesh@gmail.com");
     }
 
     function isVerified() { 
@@ -76,7 +76,11 @@ service cloud.firestore {
       return data.email is string && data.email.size() <= 128 &&
              data.get('role', 'team') in ['admin', 'team'] &&
              data.get('points', 0) is number &&
-             data.get('diamonds', 0) is number;
+             data.get('diamonds', 0) is number &&
+             data.get('gameId', '') is string && data.get('gameId', '').size() <= 64 &&
+             data.get('serverId', '') is string && data.get('serverId', '').size() <= 64 &&
+             data.get('phoneNumber', '') is string && data.get('phoneNumber', '').size() <= 32 &&
+             data.get('teamName', '') is string && data.get('teamName', '').size() <= 64;
     }
 
     function isValidTeam(data) {
@@ -102,18 +106,18 @@ service cloud.firestore {
       
       allow create: if (
         isValidId(userId) &&
-        isOwner(userId)
+        isOwner(userId) &&
+        isValidUser(incoming())
       );
 
       allow update: if (
         isSignedIn() && (
           isStaff('users') || isStaff('logo-update') || isStaff('matches') || (
             isOwner(userId) && 
-            // Only allow if profile edits are enabled in global settings
+            // Only allow if profile edits are enabled in global settings or it hasn't been set yet
             (exists(/databases/$(database)/documents/settings/global) == false || get(/databases/$(database)/documents/settings/global).data.get('profileEditsEnabled', true) == true) &&
-            incoming().get('role', existing().get('role', 'team')) == existing().get('role', 'team') &&
-            incoming().get('points', existing().get('points', 0)) == existing().get('points', 0) &&
-            incoming().get('diamonds', existing().get('diamonds', 0)) == existing().get('diamonds', 0)
+            // Prevent changing critical fields
+            (!incoming().diff(existing()).affectedKeys().hasAny(['role', 'points', 'diamonds', 'isVerified', 'isAdmin']))
           )
         )
       );

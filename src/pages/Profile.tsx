@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { db, storage, auth, handleFirestoreError, OperationType } from '../lib/firebase';
-import { doc, getDoc, updateDoc, writeBatch, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, writeBatch, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { updateEmail } from 'firebase/auth';
 import { toast } from 'react-hot-toast';
@@ -175,11 +175,13 @@ const Profile: React.FC = () => {
             players: teamData.players.length >= 7 ? teamData.players.slice(0, 7) : [...teamData.players, ...Array(7 - teamData.players.length).fill('')]
           });
         } else if (userSnap.exists()) {
-          // Team doesn't exist, but we have user data (maybe they want to update their number before creating a team)
+          // Team doesn't exist, but we have user data (maybe they want to update their number/UID before creating a team)
           setFormData(prev => ({
             ...prev,
             email: userSnap.data().email || (targetId === user?.id ? auth.currentUser?.email : '') || '',
-            phoneNumber: userSnap.data().phoneNumber || ''
+            phoneNumber: userSnap.data().phoneNumber || '',
+            gameId: userSnap.data().gameId || '',
+            serverId: userSnap.data().serverId || ''
           }));
         }
       } catch (err) {
@@ -361,8 +363,9 @@ const Profile: React.FC = () => {
       // --- Final Write Batch ---
       const batch = writeBatch(db);
       
-      if (team?.id) {
-        const teamRef = doc(db, 'teams', team.id);
+      const teamIdToUpdate = team?.id;
+      if (teamIdToUpdate) {
+        const teamRef = doc(db, 'teams', teamIdToUpdate);
         batch.update(teamRef, {
           teamName: formData.teamName,
           leaderName: formData.leaderName,
@@ -371,7 +374,8 @@ const Profile: React.FC = () => {
           leaderCardUrl,
           gameId: formData.gameId,
           serverId: formData.serverId,
-          players: currentPlayers
+          players: currentPlayers,
+          updatedAt: serverTimestamp()
         });
       }
 
@@ -383,13 +387,19 @@ const Profile: React.FC = () => {
           phoneNumber: formData.phoneNumber,
           logoUrl,
           gameId: formData.gameId,
-          serverId: formData.serverId
+          serverId: formData.serverId,
+          updatedAt: serverTimestamp()
         };
         if (isAdmin) userUpdate.email = formData.email;
         batch.update(userSnap.ref, userUpdate);
       }
 
-      await batch.commit();
+      try {
+        await batch.commit();
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `batch-save/user-team`);
+      }
+      
       toast.success("Profile updated successfully!", { id: saveToast });
       setSuccess("Profile updated successfully!");
       setFormData(prev => ({ ...prev, logoUrl, leaderCardUrl }));
@@ -454,6 +464,8 @@ const Profile: React.FC = () => {
         await setDoc(doc(db, 'users', actualUserId), {
           phoneNumber: formData.phoneNumber,
           email: formData.email || auth.currentUser?.email || '',
+          gameId: formData.gameId || '',
+          serverId: formData.serverId || '',
           updatedAt: serverTimestamp()
         }, { merge: true });
       } catch (error) {
@@ -590,6 +602,33 @@ const Profile: React.FC = () => {
             
             <form onSubmit={handleSavePersonal} className="space-y-6 text-left mt-6">
               <fieldset disabled={isLocked} className="space-y-6 disabled:opacity-50">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Player UID (Game ID)</label>
+                    <input
+                      type="text"
+                      name="gameId"
+                      inputMode="numeric"
+                      value={formData.gameId || ''}
+                      onChange={handleInputChange}
+                      placeholder="e.g. 12345678"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-4 focus:outline-none focus:border-neon-blue transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Server ID</label>
+                    <input
+                      type="text"
+                      name="serverId"
+                      inputMode="numeric"
+                      value={formData.serverId || ''}
+                      onChange={handleInputChange}
+                      placeholder="e.g. 1234"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-4 focus:outline-none focus:border-neon-blue transition-all"
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">WhatsApp / Phone Number</label>
                   <input

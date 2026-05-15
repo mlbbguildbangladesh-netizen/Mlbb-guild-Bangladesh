@@ -406,9 +406,9 @@ const Admin: React.FC = () => {
   const toggleSetting = async (key: keyof Omit<AppSetting, 'id'>) => {
     if (!settings) return;
     
-    // For visibility flags (starting with 'show'), default to true if undefined
+    // For visibility flags and profile edits, default to true if undefined
     const currentValue = settings[key] === undefined 
-      ? (key.toString().startsWith('show') ? true : false)
+      ? (key.toString().startsWith('show') || key === 'profileEditsEnabled' ? true : false)
       : settings[key];
       
     const newValue = !currentValue;
@@ -520,6 +520,8 @@ const Admin: React.FC = () => {
         logoUrl: reg.logoUrl || '',
         leaderCardUrl: reg.leaderCardUrl || '',
         phoneNumber: reg.phoneNumber || '',
+        gameId: reg.gameId || '',
+        serverId: reg.serverId || '',
         customData: reg.customData || {}
       };
 
@@ -537,6 +539,8 @@ const Admin: React.FC = () => {
           logoUrl: reg.logoUrl || '',
           email: reg.leaderEmail,
           phoneNumber: reg.phoneNumber || '',
+          gameId: reg.gameId || '',
+          serverId: reg.serverId || '',
           points: 100,
           diamonds: 100
         }, { merge: true });

@@ -36,6 +36,8 @@ const Registration: React.FC = () => {
     leaderName: '',
     leaderEmail: '',
     phoneNumber: '',
+    gameId: '',
+    serverId: '',
     players: ['', '', '', '', '', '', ''],
     type: 'new' as 'new' | 'old',
     logoUrl: '',
@@ -382,6 +384,8 @@ const Registration: React.FC = () => {
         leaderName: formData.leaderName,
         leaderEmail: formData.leaderEmail,
         phoneNumber: formData.phoneNumber,
+        gameId: formData.gameId,
+        serverId: formData.serverId,
         players: formData.players,
         type: formData.type,
         logoUrl,
@@ -627,6 +631,8 @@ const Registration: React.FC = () => {
                   leaderName: '',
                   leaderEmail: '',
                   phoneNumber: '',
+                  gameId: '',
+                  serverId: '',
                   players: ['', '', '', '', '', '', ''],
                   type: 'new',
                   logoUrl: '',
@@ -827,6 +833,35 @@ const Registration: React.FC = () => {
                 onChange={handleInputChange}
                 className="w-full bg-white/5 border border-white/10 rounded-lg py-3 px-4 focus:outline-none focus:border-neon-blue text-sm"
                 placeholder="Leader IGN"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+            <div className="space-y-2">
+              <label className="text-xs font-black uppercase text-gray-500">Player UID (Game ID)</label>
+              <input
+                required
+                type="text"
+                inputMode="numeric"
+                name="gameId"
+                value={formData.gameId}
+                onChange={handleInputChange}
+                className="w-full bg-white/5 border border-white/10 rounded-lg py-3 px-4 focus:outline-none focus:border-neon-blue"
+                placeholder="Leader's MLBB ID"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-black uppercase text-gray-500">Server ID</label>
+              <input
+                required
+                type="text"
+                inputMode="numeric"
+                name="serverId"
+                value={formData.serverId}
+                onChange={handleInputChange}
+                className="w-full bg-white/5 border border-white/10 rounded-lg py-3 px-4 focus:outline-none focus:border-neon-blue"
+                placeholder="Leader's Server ID"
               />
             </div>
           </div>

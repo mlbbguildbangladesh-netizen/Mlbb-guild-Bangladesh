@@ -88,6 +88,8 @@ export interface Registration {
   leaderName: string;
   leaderEmail: string;
   phoneNumber?: string;
+  gameId?: string;
+  serverId?: string;
   players: string[];
   logoUrl?: string;
   leaderCardUrl?: string;
