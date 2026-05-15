@@ -102,8 +102,7 @@ service cloud.firestore {
       
       allow create: if (
         isValidId(userId) &&
-        isOwner(userId) && 
-        isValidUser(incoming())
+        isOwner(userId)
       );
 
       allow update: if (
@@ -112,7 +111,7 @@ service cloud.firestore {
             isOwner(userId) && 
             // Only allow if profile edits are enabled in global settings
             (exists(/databases/$(database)/documents/settings/global) == false || get(/databases/$(database)/documents/settings/global).data.get('profileEditsEnabled', true) == true) &&
-            incoming().get('role', existing().get('role', 'user')) == existing().get('role', 'user') &&
+            incoming().get('role', existing().get('role', 'team')) == existing().get('role', 'team') &&
             incoming().get('points', existing().get('points', 0)) == existing().get('points', 0) &&
             incoming().get('diamonds', existing().get('diamonds', 0)) == existing().get('diamonds', 0)
           )
