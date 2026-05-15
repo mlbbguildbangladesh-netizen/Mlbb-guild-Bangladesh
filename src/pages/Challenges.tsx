@@ -25,7 +25,10 @@ import {
   Shield,
   Zap,
   TrendingUp,
-  Diamond
+  Diamond,
+  History,
+  TrendingDown,
+  MinusCircle
 } from 'lucide-react';
 import { 
   collection, 
@@ -39,10 +42,12 @@ import {
   serverTimestamp,
   getDocs,
   addDoc,
-  writeBatch
+  writeBatch,
+  orderBy,
+  limit
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import { Team, Challenge, AppSetting, ChallengeDetails, ScheduleMatch, MATCH_SLOTS, MAX_SEASON_MATCHES } from '../types';
+import { db, auth } from '../lib/firebase';
+import { Team, Challenge, AppSetting, ChallengeDetails, ScheduleMatch, Transaction, MATCH_SLOTS, MAX_SEASON_MATCHES } from '../types';
 import CountdownTimer from '../components/CountdownTimer';
 import { FALLBACK_IMAGE } from '../lib/utils';
 import { ImageWithFallback } from '../components/ImageWithFallback';
@@ -58,10 +63,11 @@ const Challenges: React.FC = () => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [schedules, setSchedules] = useState<ScheduleMatch[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [settings, setSettings] = useState<AppSetting | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'board' | 'dashboard' | 'matches' | 'schedule'>('board');
+  const [activeTab, setActiveTab] = useState<'board' | 'dashboard' | 'matches' | 'schedule' | 'history'>('board');
   const [newMatchNotify, setNewMatchNotify] = useState<string | null>(null);
   const [timePickerTeam, setTimePickerTeam] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState('');
@@ -80,11 +86,25 @@ const Challenges: React.FC = () => {
     });
   }, [challenges]);
 
-  // For current user's team
   const currentTeam = useMemo(() => {
-    if (!user || user.role === 'admin') return null;
-    return teams.find(t => t.teamName === user.teamName || t.ownerId === user.id);
+    if (!user) return null;
+    if (user.role === 'admin') return null;
+    
+    // First try finding by where user is owner (for leaders)
+    const ownedTeam = teams.find(t => t.ownerId === user.id);
+    if (ownedTeam) return ownedTeam;
+
+    // Then try finding by the teamId associated with the user profile (for regular players)
+    if (user.teamId) {
+      return teams.find(t => t.id === user.teamId) || null;
+    }
+    
+    return null;
   }, [user, teams]);
+
+  const isLeader = useMemo(() => {
+    return currentTeam && currentTeam.ownerId === user?.id;
+  }, [currentTeam, user]);
 
   const userChallenge = useMemo(() => {
     if (!currentTeam) return null;
@@ -177,19 +197,58 @@ const Challenges: React.FC = () => {
       console.error("Settings Snapshot Error:", error);
     });
 
+    let unsubscribeTransactions: any = () => {};
+    const currentUser = auth.currentUser;
+    if (currentTeam?.id && currentUser) {
+       const qTrans = query(
+         collection(db, 'transactions'),
+         where('allowedViewerUids', 'array-contains', currentUser.uid),
+         orderBy('timestamp', 'desc'),
+         limit(50)
+       );
+       unsubscribeTransactions = onSnapshot(qTrans, (snap) => {
+         setTransactions(snap.docs.map(d => ({
+           id: d.id,
+           ...d.data(),
+           timestamp: d.data().timestamp?.toDate ? d.data().timestamp.toDate().toISOString() : d.data().timestamp
+         } as Transaction)));
+       }, (err) => {
+         console.warn("Transactions Snapshot Error:", err);
+       });
+    }
+
     return () => {
       clearTimeout(timer);
       unsubscribeTeams();
       unsubscribeChallenges();
       unsubscribeSchedules();
       unsubscribeSettings();
+      unsubscribeTransactions();
     };
-  }, []);
+  }, [currentTeam?.id]);
 
 
 
   const handleCreateChallenge = async () => {
     if (!currentTeam || !timePickerTeam) return;
+
+    // Rule: Active Season Check
+    const activeSeasonId = settings?.currentSeasonId;
+    if (!activeSeasonId) {
+      toast.error("No active season is currently set. Challenges are disabled.");
+      return;
+    }
+
+    if (currentTeam.seasonId !== activeSeasonId) {
+      toast.error("Your team is not part of the active season.");
+      return;
+    }
+
+    const targetTeam = teams.find(t => t.id === timePickerTeam);
+    if (!targetTeam || targetTeam.seasonId !== activeSeasonId) {
+      toast.error("The selected guild is not part of the active season.");
+      return;
+    }
 
     // Rule: Season Match Limit
     if ((currentTeam.matchesThisSeason || 0) >= MAX_SEASON_MATCHES) {
@@ -237,7 +296,6 @@ const Challenges: React.FC = () => {
       console.error("Booking check error:", err);
     }
 
-    const targetTeam = teams.find(t => t.id === timePickerTeam);
     if (targetTeam && (targetTeam.matchesThisSeason || 0) >= MAX_SEASON_MATCHES) {
       toast.error("The opponent team has reached their season match limit.");
       return;
@@ -400,10 +458,14 @@ const Challenges: React.FC = () => {
     if (t.registrationStatus !== 'approved') return false;
     if (!t.teamName.toLowerCase().includes(searchTerm.toLowerCase())) return false;
 
-    if (activeSeasonId) {
-      if (currentTeam && currentTeam.seasonId !== activeSeasonId) return false;
-      if (t.seasonId !== activeSeasonId) return false;
-    }
+    // If no active season is set, hide everything to prevent invalid challenges
+    if (!activeSeasonId) return false;
+
+    // Only show teams in the active season
+    if (t.seasonId !== activeSeasonId) return false;
+    
+    // Also the current user's team must be in the active season to see anyone
+    if (currentTeam && currentTeam.seasonId !== activeSeasonId) return false;
 
     return true;
   });
@@ -461,7 +523,8 @@ const Challenges: React.FC = () => {
             { id: 'board', name: 'Board', icon: Trophy },
             { id: 'dashboard', name: 'My War', icon: LayoutDashboard },
             { id: 'matches', name: 'Matches', icon: Swords },
-            { id: 'schedule', name: 'Schedule', icon: Clock }
+            { id: 'schedule', name: 'Schedule', icon: Clock },
+            { id: 'history', name: 'Battle Log', icon: History }
           ].map((tab) => (
             <button
               key={tab.id}
@@ -517,7 +580,12 @@ const Challenges: React.FC = () => {
                    <AlertCircle size={48} className="text-gray-500 mb-4" />
                    <h3 className="text-xl font-black uppercase text-gray-300">No guilds available to challenge</h3>
                    <p className="text-xs text-gray-500 mt-2 max-w-sm mx-auto">
-                      {settings?.currentSeasonId && currentTeam?.seasonId !== settings?.currentSeasonId ? "Your team is not registered for the current active season." : "There are currently no other guilds available or matching your search."}
+                      {!activeSeasonId 
+                        ? "There is no active season set by administrator."
+                        : currentTeam && currentTeam.seasonId !== activeSeasonId 
+                          ? "Your team is not registered for the current active season." 
+                          : "There are currently no other guilds available in the active season."
+                      }
                    </p>
                  </div>
               )}
@@ -561,18 +629,18 @@ const Challenges: React.FC = () => {
 
                     <div className="w-full md:w-auto">
                       <button
-                        disabled={isChallenged || !currentTeam || settings?.challengePhaseLocked}
+                        disabled={isChallenged || !isLeader || settings?.challengePhaseLocked}
                         onClick={() => setTimePickerTeam(team.id)}
                         className={`w-full md:w-48 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center gap-2 ${
                           isChallenged 
                             ? 'bg-neon-green/10 text-neon-green border border-neon-green/20' 
-                            : settings?.challengePhaseLocked
+                            : !isLeader || settings?.challengePhaseLocked
                               ? 'bg-white/5 text-gray-600 border border-white/10 cursor-not-allowed'
                               : 'bg-white text-black hover:bg-neon-blue transition-colors active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.1)]'
                         }`}
                       >
                         {isChallenged ? <CheckCircle2 size={16} /> : <Swords size={16} />}
-                        {isChallenged ? 'CHALLENGE PENDING' : settings?.challengePhaseLocked ? 'PHASE LOCKED' : 'CHALLENGE GUILD'}
+                        {isChallenged ? 'CHALLENGE PENDING' : !isLeader ? 'LEADER ONLY' : settings?.challengePhaseLocked ? 'PHASE LOCKED' : 'CHALLENGE GUILD'}
                       </button>
                     </div>
 
@@ -597,7 +665,7 @@ const Challenges: React.FC = () => {
                 <div className="lg:col-span-2 space-y-6">
                   <div className="flex items-center justify-between">
                     <h2 className="text-2xl font-black uppercase tracking-tight italic">OUTGOING <span className="text-neon-blue">REQUESTS</span></h2>
-                    {userChallenge && (
+                    {userChallenge && isLeader && (
                       <button 
                         onClick={() => handleWithdraw()}
                         className="text-[10px] font-black text-neon-red hover:underline uppercase tracking-widest flex items-center gap-2"
@@ -649,19 +717,21 @@ const Challenges: React.FC = () => {
                               </div>
                             </div>
                             
-                            <div className="flex items-center gap-3">
-                              <div className="text-right hidden sm:block">
-                                <p className="text-[10px] font-black text-neon-green uppercase">Awaiting Response</p>
-                                <p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">Pending acceptance</p>
+                              <div className="flex items-center gap-3">
+                                <div className="text-right hidden sm:block">
+                                  <p className="text-[10px] font-black text-neon-green uppercase">Awaiting Response</p>
+                                  <p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">{isLeader ? 'Pending acceptance' : 'Leader managing'}</p>
+                                </div>
+                                {isLeader && (
+                                  <button 
+                                    onClick={() => handleWithdraw(targetId)}
+                                    className="p-3 bg-neon-red/10 border border-neon-red/20 text-neon-red rounded-xl hover:bg-neon-red/20 transition-all"
+                                    title="Withdraw Challenge"
+                                  >
+                                    <X size={18} />
+                                  </button>
+                                )}
                               </div>
-                              <button 
-                                onClick={() => handleWithdraw(targetId)}
-                                className="p-3 bg-neon-red/10 border border-neon-red/20 text-neon-red rounded-xl hover:bg-neon-red/20 transition-all"
-                                title="Withdraw Challenge"
-                              >
-                                <X size={18} />
-                              </button>
-                            </div>
                           </div>
                         );
                       })}
@@ -703,9 +773,21 @@ const Challenges: React.FC = () => {
 
                           <div className="grid grid-cols-2 gap-3">
                             <button 
+                              disabled={!isLeader}
                               onClick={async () => {
                                 try {
                                   if (!currentTeam || !fromTeam) return;
+
+                                  // Rule: Active Season Check for acceptance
+                                  const activeSeasonId = settings?.currentSeasonId;
+                                  if (!activeSeasonId) {
+                                    toast.error("No active season is currently set.");
+                                    return;
+                                  }
+                                  if (currentTeam.seasonId !== activeSeasonId || fromTeam.seasonId !== activeSeasonId) {
+                                    toast.error("Both guilds must be in the active season to participate.");
+                                    return;
+                                  }
 
                                   // Rule: Season Match Limit check for acceptance
                                   if ((currentTeam.matchesThisSeason || 0) >= MAX_SEASON_MATCHES) {
@@ -807,17 +889,18 @@ const Challenges: React.FC = () => {
                                   toast.error("Failed to accept challenge.");
                                 }
                               }}
-                              className="w-full py-3 bg-neon-green text-black font-black text-[10px] uppercase tracking-widest rounded-lg shadow-[0_0_15px_rgba(52,211,153,0.2)] hover:brightness-110 transition-all flex items-center justify-center gap-2"
+                              className={`w-full py-3 ${isLeader ? 'bg-neon-green text-black' : 'bg-white/5 text-gray-500'} font-black text-[10px] uppercase tracking-widest rounded-lg shadow-[0_0_15px_rgba(52,211,153,0.2)] hover:brightness-110 transition-all flex items-center justify-center gap-2`}
                             >
                               <CheckCircle2 size={14} />
-                              ACCEPT
+                              {isLeader ? 'ACCEPT' : 'LEADER ONLY'}
                             </button>
                             <button 
+                              disabled={!isLeader}
                               onClick={() => handleReject(c)}
-                              className="w-full py-3 bg-neon-red/10 border border-neon-red/20 text-neon-red font-black text-[10px] uppercase tracking-widest rounded-lg hover:bg-neon-red/20 transition-all flex items-center justify-center gap-2"
+                              className={`w-full py-3 ${isLeader ? 'bg-neon-red/10 border border-neon-red/20 text-neon-red' : 'bg-white/5 text-gray-500'} font-black text-[10px] uppercase tracking-widest rounded-lg hover:bg-neon-red/20 transition-all flex items-center justify-center gap-2`}
                             >
                               <X size={14} />
-                              REJECT
+                              {isLeader ? 'REJECT' : '...'}
                             </button>
                           </div>
                         </div>
@@ -994,6 +1077,107 @@ const Challenges: React.FC = () => {
                 </div>
               )}
             </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'history' && (
+          <motion.div 
+            key="history"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="space-y-6"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-4">
+                <History size={24} className="text-neon-blue" />
+                <h2 className="text-2xl font-black italic uppercase tracking-tighter">BATTLE <span className="text-neon-blue">LOG</span></h2>
+              </div>
+              <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-lg border border-white/10">
+                <TrendingUp size={14} className="text-neon-green" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Points Consolidated</span>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="glass-card p-20 flex flex-col items-center justify-center">
+                <Loader2 size={32} className="animate-spin text-neon-blue mb-4" />
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Decrypting Battle Records...</p>
+              </div>
+            ) : transactions.length > 0 ? (
+              <div className="grid gap-3">
+                {transactions.map((trans) => {
+                  const isPositive = (trans.points || 0) > 0 || (trans.diamonds || 0) > 0;
+                  const isMatch = trans.type === 'win' || trans.type === 'loss';
+                  const date = trans.timestamp ? new Date(trans.timestamp).toLocaleDateString() : 'N/A';
+                  const time = trans.timestamp ? new Date(trans.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+                  
+                  return (
+                    <div key={trans.id} className="glass-card p-4 md:p-5 flex flex-col md:flex-row items-center justify-between gap-4 group hover:bg-white/10 transition-all border-l-2 border-white/10 hover:border-neon-blue">
+                      <div className="flex items-center gap-4 w-full md:w-auto">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border ${
+                          trans.type === 'win' ? 'bg-neon-green/10 border-neon-green/20 text-neon-green' :
+                          trans.type === 'loss' ? 'bg-neon-red/10 border-neon-red/20 text-neon-red' :
+                          'bg-neon-blue/10 border-neon-blue/20 text-neon-blue'
+                        }`}>
+                          {trans.type === 'win' ? <Trophy size={20} /> : 
+                           trans.type === 'loss' ? <AlertCircle size={20} /> :
+                           <Diamond size={20} />}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-black uppercase tracking-tight text-white group-hover:text-neon-blue transition-colors truncate">
+                            {trans.reason || 'Tactical Transaction'}
+                          </p>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-[10px] font-bold text-gray-500 flex items-center gap-1">
+                              <Calendar size={10} /> {date}
+                            </span>
+                            <span className="text-[10px] font-bold text-gray-500 flex items-center gap-1">
+                              <Clock size={10} /> {time}
+                            </span>
+                            {isMatch && (
+                              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
+                                trans.type === 'win' ? 'bg-neon-green/20 text-neon-green' : 'bg-neon-red/20 text-neon-red'
+                              }`}>
+                                {trans.type}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 w-full md:w-auto mt-2 md:mt-0 justify-between md:justify-end">
+                        <div className="flex flex-col items-end">
+                          {trans.points !== 0 && (
+                            <div className={`flex items-center gap-1 font-black text-sm italic ${trans.points > 0 ? 'text-neon-green' : 'text-neon-red'}`}>
+                              {trans.points > 0 ? <Plus size={12} /> : <MinusCircle size={12} />}
+                              {Math.abs(trans.points)} <span className="text-[10px] non-italic uppercase tracking-widest ml-1">Pts</span>
+                            </div>
+                          )}
+                          {trans.diamonds !== 0 && (
+                            <div className={`flex items-center gap-1 font-black text-xs italic ${trans.diamonds > 0 ? 'text-neon-blue' : 'text-neon-red'}`}>
+                              {trans.diamonds > 0 ? <Plus size={10} /> : <MinusCircle size={10} />}
+                              {Math.abs(trans.diamonds)} <span className="text-[8px] non-italic uppercase tracking-widest ml-1">Dia</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="w-1 h-8 bg-white/5 rounded-full hidden md:block" />
+                        <div className="md:w-10 flex justify-center">
+                          {isPositive ? <TrendingUp size={16} className="text-neon-green opacity-50" /> : <TrendingDown size={16} className="text-neon-red opacity-50" />}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="glass-card p-20 text-center space-y-6">
+                <History size={64} className="mx-auto text-gray-800 opacity-20" />
+                <h3 className="text-xl font-black italic uppercase">NO DATA <span className="text-neon-blue">FOUND</span></h3>
+                <p className="text-gray-500 font-bold uppercase tracking-widest text-xs max-w-sm mx-auto">
+                  Your battle history is currently empty. Engage in challenges to generate tactical records.
+                </p>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

@@ -16,6 +16,7 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
+import { signInWithCustomToken } from 'firebase/auth';
 import { FALLBACK_IMAGE, uploadExternalImageToStorage } from '../lib/utils';
 import { ImageWithFallback } from '../components/ImageWithFallback';
 import { createNotification } from '../lib/notificationUtils';
@@ -212,6 +213,7 @@ const Admin: React.FC = () => {
   const [siteResetProgress, setSiteResetProgress] = useState<string>('');
   const [allSchedules, setAllSchedules] = useState<any[]>([]);
   const [liveLinks, setLiveLinks] = useState<LiveLink[]>([]);
+  const [impersonating, setImpersonating] = useState(false);
   const [newLiveLink, setNewLiveLink] = useState({ 
     title: '', 
     url: '', 
@@ -544,12 +546,14 @@ const Admin: React.FC = () => {
       const transRef = doc(collection(db, 'transactions'));
       batch.set(transRef, {
         teamId,
+        ownerId: reg.ownerId || reg.userId || '',
         type: 'bonus',
         points: 100,
         diamonds: 100,
         reason: 'Registration Bonus',
         timestamp: serverTimestamp(),
-        performedByEmail: auth.currentUser?.email || 'System'
+        performedByEmail: auth.currentUser?.email || 'System',
+        allowedViewerUids: [reg.ownerId || reg.userId || '', ...(reg.players || [])].filter(Boolean)
       });
 
       // 4. Mark Registration as Approved
@@ -879,12 +883,14 @@ const Admin: React.FC = () => {
       const transRef = doc(collection(db, 'transactions'));
       batch.set(transRef, {
         teamId,
+        ownerId: teamData.ownerId || teamId,
         type: (pointDelta > 0 || diamondDelta > 0) ? 'bonus' : 'expense',
         points: pointDelta,
         diamonds: diamondDelta,
         reason,
         timestamp: serverTimestamp(),
-        performedByEmail: auth.currentUser?.email || 'System'
+        performedByEmail: auth.currentUser?.email || 'System',
+        allowedViewerUids: [teamData.ownerId || teamId, ...(teamData.players || [])].filter(Boolean)
       });
       
       await batch.commit();
@@ -1089,6 +1095,45 @@ const Admin: React.FC = () => {
           toast.error('Failed to delete request.');
         }
       }
+    }
+  };
+
+  const handleImpersonate = async (uid: string) => {
+    if (!settings?.maintenanceMode) {
+      toast.error("Maintenance mode must be active to impersonate users.");
+      return;
+    }
+
+    if (!window.confirm("ARE YOU SURE? You will be logged out of your current staff session and logged in as this user to test their experience during maintenance.")) {
+      return;
+    }
+
+    setImpersonating(true);
+    setProcessingId(uid);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/admin/impersonate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ uid })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      toast.loading("Switching identity...", { duration: 2000 });
+      await signInWithCustomToken(auth, data.token);
+      toast.success("Impersonation successful!");
+      window.location.href = '/';
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Impersonation failed: " + err.message);
+    } finally {
+      setImpersonating(false);
+      setProcessingId(null);
     }
   };
 
@@ -1503,11 +1548,13 @@ const Admin: React.FC = () => {
         const transRef = doc(collection(db, 'transactions'));
         await setDoc(transRef, {
           teamId: editingTeam.id,
+          ownerId: editingTeam.ownerId || editingTeam.id,
           type: (pointDelta > 0 || diamondDelta > 0) ? 'bonus' : 'expense',
           points: pointDelta,
           diamonds: diamondDelta,
           reason: 'Admin Manual Edit',
-          timestamp: serverTimestamp()
+          timestamp: serverTimestamp(),
+          allowedViewerUids: [editingTeam.ownerId || editingTeam.id, ...(editingTeam.players || [])].filter(Boolean)
         });
       }
 
@@ -2471,6 +2518,15 @@ const Admin: React.FC = () => {
                   </div>
 
                   <div className="flex gap-2">
+                    {settings?.maintenanceMode && (
+                      <button 
+                        onClick={() => handleImpersonate(u.id)}
+                        disabled={!!processingId}
+                        className="flex-1 py-2 bg-neon-purple/10 hover:bg-neon-purple/20 rounded-lg text-neon-purple transition-colors flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest border border-neon-purple/20"
+                      >
+                         <Lock size={14} /> LOGIN
+                      </button>
+                    )}
                     <Link 
                       to={`/profile?id=${u.teamId || u.id}`}
                       className="flex-1 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-neon-blue transition-colors flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest"
@@ -2546,6 +2602,16 @@ const Admin: React.FC = () => {
                          </td>
                          <td className="px-6 py-4">
                            <div className="flex gap-2 text-blue-500">
+                             {settings?.maintenanceMode && (
+                                <button 
+                                  onClick={() => handleImpersonate(u.id)}
+                                  disabled={!!processingId}
+                                  className="p-2 bg-neon-purple/10 hover:bg-neon-purple/20 rounded-lg text-neon-purple transition-colors border border-neon-purple/20"
+                                  title="Login as user"
+                                >
+                                  {processingId === u.id ? <Loader2 size={16} className="animate-spin" /> : <Lock size={16} />}
+                                </button>
+                              )}
                              <Link 
                                to={`/profile?id=${u.teamId || u.id}`}
                                className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-neon-blue transition-colors"
@@ -2817,21 +2883,21 @@ const Admin: React.FC = () => {
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 pointer-events-auto relative z-30">
                          <span className="text-[10px] font-black bg-white/5 px-2 py-1 rounded text-gray-500 flex items-center gap-1 border border-white/5">
                            <TrendingUp size={10} /> {link.order}
                          </span>
                          {confirmLiveDeleteId === link.id ? (
                            <div className="flex items-center gap-1">
                              <button 
-                               onClick={() => handleDeleteLiveLink(link.id)}
+                               onClick={(e) => { e.stopPropagation(); handleDeleteLiveLink(link.id); }}
                                disabled={processingId === link.id}
                                className="px-2 py-1 bg-neon-red text-white text-[10px] font-black uppercase rounded hover:brightness-110 transition-all shadow-[0_0_10px_rgba(255,46,99,0.3)]"
                              >
                                {processingId === link.id ? '...' : 'YES'}
                              </button>
                              <button 
-                               onClick={() => setConfirmLiveDeleteId(null)}
+                               onClick={(e) => { e.stopPropagation(); setConfirmLiveDeleteId(null); }}
                                className="px-2 py-1 bg-white/10 text-gray-400 text-[10px] font-black uppercase rounded hover:bg-white/20 transition-all"
                              >
                                NO
@@ -2839,7 +2905,7 @@ const Admin: React.FC = () => {
                            </div>
                          ) : (
                            <button 
-                            onClick={() => setConfirmLiveDeleteId(link.id)}
+                            onClick={(e) => { e.stopPropagation(); setConfirmLiveDeleteId(link.id); }}
                             className="p-2 text-gray-500 hover:text-neon-red hover:bg-neon-red/10 rounded-lg transition-all border border-transparent hover:border-neon-red/50"
                           >
                             <Trash size={16} />
@@ -2956,19 +3022,19 @@ const Admin: React.FC = () => {
 
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Profile Edit Lock</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Lock user profile and roster edits</p>
+                      <p className="text-[11px] font-black uppercase tracking-tight">Profile Edit Option</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Activate/Deactivate user profile and roster edits</p>
                     </div>
                     <button 
-                      onClick={() => toggleSetting('playerEditsLocked')}
+                      onClick={() => toggleSetting('profileEditsEnabled')}
                       className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[9px] transition-all ${
-                        settings?.playerEditsLocked 
-                        ? 'bg-neon-red/20 text-neon-red border border-neon-red/50' 
-                        : 'bg-neon-blue/20 text-neon-blue border border-neon-blue/50'
+                        settings?.profileEditsEnabled 
+                        ? 'bg-neon-green/20 text-neon-green border border-neon-green/50' 
+                        : 'bg-neon-red/20 text-neon-red border border-neon-red/50'
                       }`}
                     >
-                      {settings?.playerEditsLocked ? <Lock size={12} /> : <Unlock size={12} />}
-                      {settings?.playerEditsLocked ? 'LOCKED' : 'ACTIVE'}
+                      {settings?.profileEditsEnabled ? <Unlock size={12} /> : <Lock size={12} />}
+                      {settings?.profileEditsEnabled ? 'ACTIVATED' : 'DEACTIVATED'}
                     </button>
                   </div>
   
@@ -3135,6 +3201,24 @@ const Admin: React.FC = () => {
                     >
                       {settings?.showChallenges !== false ? <Eye size={12} /> : <X size={12} />}
                       {settings?.showChallenges !== false ? 'VISIBLE' : 'HIDDEN'}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-black uppercase tracking-tight">Profile Editing</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Allow users to update team info & leader card</p>
+                    </div>
+                    <button 
+                      onClick={() => toggleSetting('profileEditsEnabled')}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[9px] transition-all ${
+                        settings?.profileEditsEnabled !== false
+                        ? 'bg-neon-green/20 text-neon-green border border-neon-green/50' 
+                        : 'bg-neon-red/20 text-neon-red border border-neon-red/50'
+                      }`}
+                    >
+                      {settings?.profileEditsEnabled !== false ? <Eye size={12} /> : <X size={12} />}
+                      {settings?.profileEditsEnabled !== false ? 'ENABLED' : 'DISABLED'}
                     </button>
                   </div>
 

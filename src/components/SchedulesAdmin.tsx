@@ -698,11 +698,11 @@ export default function SchedulesAdmin() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
                       <div className="flex items-center gap-3">
                         <span className={`text-[10px] font-black uppercase px-2 py-1 border rounded ${
                           s.status === 'upcoming' ? 'bg-neon-blue/10 text-neon-blue border-neon-blue/20' :
-                          s.status === 'live' ? 'bg-neon-red/10 text-neon-red border-neon-red/20 animate-pulse' :
+                          s.status === 'live' ? 'bg-neon-red text-white border-neon-red animate-pulse' :
                           s.status === 'completed' ? 'bg-neon-green/10 text-neon-green border-neon-green/20' :
                           'bg-neon-red/10 text-neon-red border-neon-red/20'
                         }`}>
@@ -713,20 +713,22 @@ export default function SchedulesAdmin() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1 z-30 pointer-events-auto">
+                      <div className="flex items-center gap-2 pointer-events-auto">
                         <button 
                           type="button"
                           onClick={() => { setEditingId(s.id); setEditMatch(s); }} 
-                          className="text-gray-400 hover:text-neon-blue p-1.5 bg-white/5 rounded-lg transition-all border border-white/10 hover:border-neon-blue/50 active:scale-95"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-blue/10 text-neon-blue rounded-lg text-[10px] font-black uppercase border border-neon-blue/20 hover:bg-neon-blue hover:text-black transition-all active:scale-95 shadow-[0_0_10px_rgba(0,229,255,0.1)]"
                         >
                           <Pencil size={12}/>
+                          Edit
                         </button>
                         <button 
                           type="button"
                           onClick={() => setDeleteConfirmId(s.id)} 
-                          className="text-gray-400 hover:text-neon-red p-1.5 bg-white/5 rounded-lg transition-all border border-white/10 hover:border-neon-red/50 active:scale-95"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-red/10 text-neon-red rounded-lg text-[10px] font-black uppercase border border-neon-red/20 hover:bg-neon-red hover:text-white transition-all active:scale-95 shadow-[0_0_10px_rgba(255,46,99,0.1)]"
                         >
                           <Trash size={12}/>
+                          Delete
                         </button>
                       </div>
                     </div>

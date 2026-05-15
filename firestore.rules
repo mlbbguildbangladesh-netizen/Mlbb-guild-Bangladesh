@@ -14,7 +14,7 @@ service cloud.firestore {
     function isMasterAdmin() {
       return isSignedIn() && 
              request.auth.token.email != null && 
-             request.auth.token.email.lower() == "mlbbguildbangladesh@gmail.com";
+             (request.auth.token.email == "mlbbguildbangladesh@gmail.com" || request.auth.token.email.lower() == "mlbbguildbangladesh@gmail.com");
     }
 
     function isVerified() { 
@@ -47,6 +47,29 @@ service cloud.firestore {
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
+
+    function isTeamOwner(teamId) {
+       return isSignedIn() && (
+         teamId == request.auth.uid || 
+         (exists(/databases/$(database)/documents/teams/$(teamId)) && get(/databases/$(database)/documents/teams/$(teamId)).data.ownerId == request.auth.uid)
+       );
+    }
+
+    function canListTransactions() {
+      return isStaff('transactions') || isStaff('matches') || 
+             (isSignedIn() && (
+               resource.data.get('ownerId', '') == request.auth.uid || 
+               resource.data.get('teamId', '') == request.auth.uid ||
+               request.auth.uid in resource.data.get('allowedViewerUids', [])
+             ));
+    }
+
+    function canListRegistrations() {
+       return resource.data.get('status', 'none') == 'approved' || 
+              isStaff('registrations') || 
+              isOwner(resource.data.get('ownerId', '')) || 
+              isOwner(resource.data.get('userId', ''));
+    }
 
     // --- Validation Blueprints ---
     function isValidUser(data) {
@@ -87,7 +110,9 @@ service cloud.firestore {
         isSignedIn() && (
           isStaff('users') || isStaff('logo-update') || isStaff('matches') || (
             isOwner(userId) && 
-            incoming().get('role', existing().role) == existing().role &&
+            // Only allow if profile edits are enabled in global settings
+            (exists(/databases/$(database)/documents/settings/global) == false || get(/databases/$(database)/documents/settings/global).data.get('profileEditsEnabled', true) == true) &&
+            incoming().get('role', existing().get('role', 'user')) == existing().get('role', 'user') &&
             incoming().get('points', existing().get('points', 0)) == existing().get('points', 0) &&
             incoming().get('diamonds', existing().get('diamonds', 0)) == existing().get('diamonds', 0)
           )
@@ -106,6 +131,8 @@ service cloud.firestore {
         isSignedIn() && (
           isStaff('teams') || isStaff('logo-update') || isStaff('matches') || (
             (isOwner(existing().get('ownerId', '')) || isOwner(teamId)) &&
+            // Only allow if profile edits are enabled in global settings
+            (exists(/databases/$(database)/documents/settings/global) == false || get(/databases/$(database)/documents/settings/global).data.get('profileEditsEnabled', true) == true) &&
             incoming().get('ownerId', existing().get('ownerId', '')) == existing().get('ownerId', '')
           ) || (
             // Support for batch increments of matchesThisSeason or player recruitment
@@ -120,8 +147,8 @@ service cloud.firestore {
 
     match /registrations/{regId} {
       allow create: if isValidId(regId) && isSignedIn() && isValidRegistration(incoming());
-      allow get: if isStaff('registrations') || (isSignedIn() && (resource != null && (existing().get('ownerId', '') == request.auth.uid || existing().get('userId', '') == request.auth.uid)));
-      allow list: if isStaff('registrations') || (isSignedIn() && (resource.data.get('ownerId', '') == request.auth.uid || resource.data.get('userId', '') == request.auth.uid));
+      allow get: if isStaff('registrations') || (isSignedIn() && (resource != null && (existing().get('ownerId', '') == request.auth.uid || existing().get('userId', '') == request.auth.uid))) || (resource != null && resource.data.get('status', '') == 'approved');
+      allow list: if resource.data.get('status', '') == 'approved' || isSignedIn();
       allow write: if isStaff('registrations');
     }
 
@@ -131,8 +158,8 @@ service cloud.firestore {
     }
 
     match /transactions/{transId} {
-      allow read: if isStaff('transactions') || isStaff('matches') || (isSignedIn() && resource != null && existing().get('teamId', '') == request.auth.uid);
-      allow list: if isStaff('transactions') || isStaff('matches') || (isSignedIn() && resource.data.get('teamId', '') == request.auth.uid);
+      allow read: if isStaff('transactions') || isStaff('matches') || (isSignedIn() && resource != null && (existing().get('teamId', '') == request.auth.uid || existing().get('ownerId', '') == request.auth.uid || request.auth.uid in existing().get('allowedViewerUids', [])));
+      allow list: if canListTransactions();
       allow write: if isStaff('transactions') || isStaff('matches');
     }
 
@@ -190,7 +217,7 @@ service cloud.firestore {
 
     match /live_links/{linkId} {
       allow read, list: if true;
-      allow write: if isStaff('live-links');
+      allow write, delete: if isStaff('live-links');
     }
 
     match /settings/{settingId} {

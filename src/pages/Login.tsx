@@ -50,14 +50,14 @@ const Login: React.FC = () => {
   const [forgotEmail, setForgotEmail] = useState('');
 
   useEffect(() => {
-    if (firebaseUser) {
+    if (firebaseUser && !loading) {
       if (isAdmin) {
         navigate('/admin');
       } else if (user) {
         navigate('/');
       }
     }
-  }, [user, firebaseUser, isAdmin, navigate, settings]);
+  }, [user, firebaseUser, isAdmin, navigate, loading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

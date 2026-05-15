@@ -62,6 +62,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, (fUser) => {
       setFirebaseUser(fUser);
       
+      // Safety timeout: if onSnapshot takes too long, stop loading
+      const snapshotTimeout = setTimeout(() => {
+        if (loading) {
+          console.warn("Auth snapshot timeout reached. Proceeding with limited data.");
+          setLoading(false);
+        }
+      }, 3000);
+
       if (unsubUserDocument) {
         unsubUserDocument();
         unsubUserDocument = null;
@@ -75,6 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // User is logged in, attach a real-time listener to their data
         const userRef = doc(db, 'users', fUser.uid);
         unsubUserDocument = onSnapshot(userRef, (docSnap) => {
+          clearTimeout(snapshotTimeout);
           const isAdminEmail = fUser.email?.toLowerCase() === 'mlbbguildbangladesh@gmail.com';
           
           if (docSnap.exists()) {
@@ -82,28 +91,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             
             // Proactively ensure admin role is set in DB to help security rules
             if (isAdminEmail) {
-              const updates: any = {};
-              if (userData.role !== 'admin') updates.role = 'admin';
-              
-              const settingsRef = doc(db, 'settings', 'global');
-              getDoc(settingsRef).then(sSnap => {
-                const sData = sSnap.exists() ? sSnap.data() : {};
-                const uids = sData.adminUids || [];
-                if (!uids.includes(fUser.uid)) {
-                  console.log("Adding UID to admin list:", fUser.uid);
-                  setDoc(settingsRef, {
-                    adminUids: [...uids, fUser.uid]
-                  }, { merge: true }).catch(err => {
-                    console.error("Failed to update admin list in settings:", err);
-                  });
-                }
-              }).catch(err => {
-                console.error("Failed to read settings for admin sync:", err);
-              });
+              const isAdminInDoc = userData.role === 'admin';
+              const isAdminInSettings = settings?.adminUids?.includes(fUser.uid);
 
-              if (Object.keys(updates).length > 0) {
-                updateDoc(userRef, updates).catch(err => {
-                  console.error("Proactive Admin Update Failed:", err);
+              if (!isAdminInDoc) {
+                updateDoc(userRef, { role: 'admin' }).catch(err => {
+                  console.error("Proactive Admin Role Update Failed:", err);
+                });
+              }
+
+              if (settings && !isAdminInSettings) {
+                const settingsRef = doc(db, 'settings', 'global');
+                const newAdminUids = [...(settings.adminUids || []), fUser.uid];
+                setDoc(settingsRef, { adminUids: newAdminUids }, { merge: true }).catch(err => {
+                  console.error("Failed to update admin list in settings:", err);
                 });
               }
             }
@@ -180,10 +181,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
           setLoading(false);
         }, (error) => {
+          clearTimeout(snapshotTimeout);
           console.error("User Snapshot Error:", error);
           setLoading(false);
         });
       } else {
+        clearTimeout(snapshotTimeout);
         setUser(null);
         setLoading(false);
       }

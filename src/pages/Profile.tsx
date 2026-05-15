@@ -4,6 +4,7 @@ import { db, storage, auth, handleFirestoreError, OperationType } from '../lib/f
 import { doc, getDoc, updateDoc, writeBatch, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { updateEmail } from 'firebase/auth';
+import { toast } from 'react-hot-toast';
 import { Team } from '../types';
 import { motion } from 'framer-motion';
 import { Shield, User, Camera, Save, Loader2, AlertCircle, CheckCircle, Users, Mail, Send, RefreshCw, Lock, History, Clock } from 'lucide-react';
@@ -15,9 +16,12 @@ import { Transaction } from '../types';
 import { orderBy, limit, onSnapshot } from 'firebase/firestore';
 
 const Profile: React.FC = () => {
-  const { user, isAdmin, settings } = useAuth();
+  const { user, isAdmin, isModerator, settings, loading: authLoading } = useAuth();
   const [searchParams] = useSearchParams();
-  const targetId = searchParams.get('id') || (isAdmin ? null : user?.id);
+  
+  // Use a stable current user ID for lookups
+  const currentUid = auth.currentUser?.uid;
+  const targetId = searchParams.get('id') || (isAdmin ? null : currentUid || user?.id);
 
   const [team, setTeam] = useState<Team | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -50,15 +54,20 @@ const Profile: React.FC = () => {
     let unsubscribeTransactions: any = () => {};
 
     const fetchTeam = async () => {
+      // Don't start fetching until auth state is known
+      if (authLoading) return;
+
       if (!targetId) {
         setLoading(false);
         return;
       }
       
       setLoading(true);
+      setError(null);
 
       try {
         let teamDoc;
+        const currentUser = auth.currentUser;
         
         if (isAdmin && searchParams.get('id')) {
           // Admin viewing specific team via search param
@@ -77,11 +86,14 @@ const Profile: React.FC = () => {
             } else {
               // Check if they have a pending registration
               try {
-                const regQuery = query(collection(db, 'registrations'), where('ownerId', '==', targetId));
-                const regSnap = await getDocs(regQuery);
-                if (!regSnap.empty) {
-                  const isPending = regSnap.docs.some(d => d.data().status === 'pending');
-                  setPendingRegistration(isPending);
+                const regOwnerId = targetId || currentUser?.uid;
+                if (regOwnerId) {
+                  const regQuery = query(collection(db, 'registrations'), where('ownerId', '==', regOwnerId));
+                  const regSnap = await getDocs(regQuery);
+                  if (!regSnap.empty) {
+                    const isPending = regSnap.docs.some(d => d.data().status === 'pending');
+                    setPendingRegistration(isPending);
+                  }
                 }
               } catch(e) {
                 console.warn("Could not fetch registrations:", e);
@@ -90,11 +102,14 @@ const Profile: React.FC = () => {
           }
         }
 
-        let userSnap: any = { exists: () => false, data: () => ({}) };
+        let userSnap: any = { exists: () => false, data: () => ({}), ref: doc(db, 'users', 'temporary') };
         try {
-          userSnap = await getDoc(doc(db, 'users', targetId || user?.id || ''));
+          const lookupUid = targetId || currentUser?.uid;
+          if (lookupUid) {
+            userSnap = await getDoc(doc(db, 'users', lookupUid));
+          }
         } catch(e) {
-          console.warn("Could not fetch user document (might not be owner)");
+          console.warn("Could not fetch user document");
         }
         
         if (teamDoc && teamDoc.exists()) {
@@ -102,16 +117,38 @@ const Profile: React.FC = () => {
           setTeam(teamData);
 
           // Setup transaction listener
-          const transQuery = query(
-            collection(db, 'transactions'),
-            where('teamId', '==', teamDoc.id),
-            orderBy('timestamp', 'desc'),
-            limit(10)
-          );
+          const currentUser = auth.currentUser;
+          const isOwnerOfViewed = currentUser && (teamDoc.id === currentUser.uid || teamData.ownerId === currentUser.uid);
+          
+          let transQuery;
+          if ((isAdmin || isModerator) && currentUser) {
+            transQuery = query(
+              collection(db, 'transactions'),
+              where('teamId', '==', teamDoc.id),
+              orderBy('timestamp', 'desc'),
+              limit(10)
+            );
+          } else if (isOwnerOfViewed && currentUser) {
+            transQuery = query(
+              collection(db, 'transactions'),
+              where('allowedViewerUids', 'array-contains', currentUser.uid),
+              orderBy('timestamp', 'desc'),
+              limit(10)
+            );
+          } else {
+            // Not authorized to view these transactions
+            setTransactions([]);
+            return;
+          }
+
           unsubscribeTransactions = onSnapshot(transQuery, (snapshot) => {
             setTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)));
           }, (err) => {
-            console.error("Trans history error:", err);
+            // Log only if truly authorized but failed (e.g. rule mismatch)
+            // If logged out, onSnapshot will naturally fail but we shouldn't spam errors
+            if (auth.currentUser) {
+              console.error("Trans history error:", err);
+            }
           });
           
           let recordEmail = '';
@@ -223,8 +260,13 @@ const Profile: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLocked) {
+      toast.error("Profile editing is currently disabled.");
+      return;
+    }
     if (!targetId) return;
     setSaving(true);
+    const saveToast = toast.loading("Saving changes...");
     setError(null);
     setSuccess(null);
     setEmailSuccess(null);
@@ -232,19 +274,17 @@ const Profile: React.FC = () => {
     try {
       const cleanPhone = (formData.phoneNumber || '').replace(/\D/g, '');
       if (cleanPhone.length !== 11) {
-        setError("WhatsApp number must be exactly 11 digits.");
-        setSaving(false);
-        return;
+        throw new Error("WhatsApp number must be exactly 11 digits.");
       }
 
-      // --- UID Uniqueness Check ---
+      // ---UID Uniqueness Check Optimization ---
       const playersRaw = formData.players;
-      const players = playersRaw.filter(p => p.trim() !== '');
+      const currentPlayers = playersRaw.filter(p => p.trim() !== '');
+      const originalPlayers = team?.players || [];
       
-      // Internal duplicates check
+      // Basic internal duplicate check (fast)
       const duplicates: number[] = [];
       const seen = new Map<string, number>();
-      
       playersRaw.forEach((uid, idx) => {
         if (!uid.trim()) return;
         if (seen.has(uid)) {
@@ -256,132 +296,107 @@ const Profile: React.FC = () => {
       });
 
       if (duplicates.length > 0) {
-        const firstDup = playersRaw[duplicates[0]];
-        setError(`Update Error: Duplicate player UID ${firstDup} found in your team roster.`);
         setErrorFields([...new Set(duplicates)]);
-        setSaving(false);
-        return;
+        throw new Error(`Duplicate player UID ${playersRaw[duplicates[0]]} found in your roster.`);
       }
 
-      if (players.length > 0) {
-        // 1. Check existing approved teams, excluding current team
-        const teamsQuery = query(collection(db, 'teams'), where('players', 'array-contains-any', players));
-        const teamsSnapshot = await getDocs(teamsQuery);
-        
-        // Filter out current team if it's in the results
-        const conflict = teamsSnapshot.docs.find(d => (team ? d.id !== team.id : d.id !== targetId));
-        
+      // Only run expensive Firestore uniqueness checks if the roster actually changed
+      const playersChanged = JSON.stringify([...currentPlayers].sort()) !== JSON.stringify([...originalPlayers].sort());
+      const actualUserId = (isAdmin && team?.ownerId) ? team.ownerId : targetId;
+
+      // --- Parallel Data Fetching & Processing ---
+      const [uniquenessResult, uploadedImages, userSnap] = await Promise.all([
+        // 1. Uniqueness check (only if roster changed)
+        (async () => {
+          if (!playersChanged || currentPlayers.length === 0) return null;
+          return await Promise.all([
+            getDocs(query(collection(db, 'teams'), where('players', 'array-contains-any', currentPlayers))),
+            getDocs(query(collection(db, 'registrations'), where('status', '==', 'pending'), where('players', 'array-contains-any', currentPlayers)))
+          ]);
+        })(),
+        // 2. Image uploads (with change detection)
+        Promise.all([
+          (async () => {
+            if (files.logo) return await uploadFile(files.logo, `teams/${targetId}/logo_${Date.now()}`);
+            // Only re-process external URL if it is DIFFERENT from what we currently have saved
+            if (formData.logoUrl && formData.logoUrl !== team?.logoUrl && !formData.logoUrl.includes('firebasestorage.googleapis.com')) {
+              return await uploadExternalImageToStorage(formData.logoUrl, `teams/${targetId}/logos`);
+            }
+            return formData.logoUrl;
+          })(),
+          (async () => {
+            if (files.card) return await uploadFile(files.card, `teams/${targetId}/card_${Date.now()}`);
+            // Only re-process external URL if it is DIFFERENT from what we currently have saved
+            if (formData.leaderCardUrl && formData.leaderCardUrl !== team?.leaderCardUrl && !formData.leaderCardUrl.includes('firebasestorage.googleapis.com')) {
+              return await uploadExternalImageToStorage(formData.leaderCardUrl, `teams/${targetId}/cards`);
+            }
+            return formData.leaderCardUrl;
+          })()
+        ]),
+        // 3. Fetch user doc for sync
+        getDoc(doc(db, 'users', actualUserId))
+      ]);
+
+      // --- Process Uniqueness Results ---
+      if (uniquenessResult) {
+        const [teamsSnap, regsSnap] = uniquenessResult;
+        const conflict = teamsSnap.docs.find(d => (team ? d.id !== team.id : d.id !== targetId));
         if (conflict) {
-          const conflictingTeamData = conflict.data();
-          const teamName = conflictingTeamData.teamName;
-          const matchedUid = players.find(uid => (conflictingTeamData.players as string[]).includes(uid));
-          
+          const matchedUid = currentPlayers.find(uid => (conflict.data().players as string[]).includes(uid));
           const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
           if (conflictIdx !== -1) setErrorFields([conflictIdx]);
-
-          setError(`Conflict Detected: Player UID ${matchedUid} is already registered on active team "${teamName}".`);
-          setSaving(false);
-          return;
+          throw new Error(`Player UID ${matchedUid} is already on active team "${conflict.data().teamName}".`);
         }
 
-        // 2. Check pending registrations (to prevent double-claiming players)
-        const regQuery = query(
-          collection(db, 'registrations'), 
-          where('status', '==', 'pending'),
-          where('players', 'array-contains-any', players)
-        );
-        const regSnapshot = await getDocs(regQuery);
-        
-        if (!regSnapshot.empty) {
-          const conflictingRegData = regSnapshot.docs[0].data();
-          const teamName = conflictingRegData.teamName;
-          const matchedUid = players.find(uid => (conflictingRegData.players as string[]).includes(uid));
-          
+        if (!regsSnap.empty) {
+          const matchedUid = currentPlayers.find(uid => (regsSnap.docs[0].data().players as string[]).includes(uid));
           const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
           if (conflictIdx !== -1) setErrorFields([conflictIdx]);
-
-          setError(`Conflict Detected: Player UID ${matchedUid} is already in a pending registration for team "${teamName}".`);
-          setSaving(false);
-          return;
+          throw new Error(`Player UID ${matchedUid} is in a pending registration for team "${regsSnap.docs[0].data().teamName}".`);
         }
       }
-      // --- End UID Uniqueness Check ---
 
-      let logoUrl = formData.logoUrl;
-      let leaderCardUrl = formData.leaderCardUrl;
+      const [logoUrl, leaderCardUrl] = uploadedImages;
 
-      if (files.logo) {
-        logoUrl = await uploadFile(files.logo, `teams/${targetId}/logo_${Date.now()}`);
-      } else if (logoUrl && !files.logo) {
-        logoUrl = await uploadExternalImageToStorage(logoUrl, `teams/${targetId}/logos`);
-      }
-      
-      if (files.card) {
-        leaderCardUrl = await uploadFile(files.card, `teams/${targetId}/card_${Date.now()}`);
-      } else if (leaderCardUrl && !files.card) {
-        leaderCardUrl = await uploadExternalImageToStorage(leaderCardUrl, `teams/${targetId}/cards`);
-      }
-
+      // --- Final Write Batch ---
       const batch = writeBatch(db);
       
-      // Update Team doc
-      const teamRef = doc(db, 'teams', targetId);
-      batch.update(teamRef, {
-        teamName: formData.teamName,
-        leaderName: formData.leaderName,
-        phoneNumber: formData.phoneNumber,
-        logoUrl,
-        leaderCardUrl,
-        gameId: formData.gameId,
-        serverId: formData.serverId,
-        players: formData.players.filter(p => p.trim() !== '')
-      });
-
-      // Update User doc (if applicable)
-      let actualUserId = targetId;
-      if (isAdmin && team?.ownerId) {
-        actualUserId = team.ownerId;
+      if (team?.id) {
+        const teamRef = doc(db, 'teams', team.id);
+        batch.update(teamRef, {
+          teamName: formData.teamName,
+          leaderName: formData.leaderName,
+          phoneNumber: formData.phoneNumber,
+          logoUrl,
+          leaderCardUrl,
+          gameId: formData.gameId,
+          serverId: formData.serverId,
+          players: currentPlayers
+        });
       }
 
-      const userRef = doc(db, 'users', actualUserId);
-      let userDoc;
-      try {
-        userDoc = await getDoc(userRef);
-      } catch (err) {
-        // Silently fail if user doc doesn't exist for this target
-        console.warn("User doc not found for profile update:", actualUserId);
-      }
-
-      if (userDoc && userDoc.exists()) {
+      if (userSnap.exists()) {
         const userUpdate: any = {
           teamName: formData.teamName,
           leaderName: formData.leaderName,
-          displayName: formData.leaderName, // Sync display name with leader name
+          displayName: formData.leaderName,
           phoneNumber: formData.phoneNumber,
           logoUrl,
           gameId: formData.gameId,
           serverId: formData.serverId
         };
-        
-        // Admin can directly update the email in the users document
-        if (isAdmin) {
-          userUpdate.email = formData.email;
-        }
-
-        batch.update(userRef, userUpdate);
+        if (isAdmin) userUpdate.email = formData.email;
+        batch.update(userSnap.ref, userUpdate);
       }
 
-      try {
-        await batch.commit();
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `teams/${targetId} and users/${actualUserId}`);
-      }
-
+      await batch.commit();
+      toast.success("Profile updated successfully!", { id: saveToast });
       setSuccess("Profile updated successfully!");
       setFormData(prev => ({ ...prev, logoUrl, leaderCardUrl }));
       setFiles({});
     } catch (err: any) {
       console.error("Save error:", err);
+      toast.error(err.message || "Failed to update profile.", { id: saveToast });
       setError(err.message || "Failed to update profile.");
     } finally {
       setSaving(false);
@@ -416,6 +431,10 @@ const Profile: React.FC = () => {
 
   const handleSavePersonal = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLocked) {
+      toast.error("Profile editing is currently disabled.");
+      return;
+    }
     const actualUserId = targetId || user?.id;
     if (!actualUserId) return;
     
@@ -431,9 +450,13 @@ const Profile: React.FC = () => {
         return;
       }
 
-      await updateDoc(doc(db, 'users', actualUserId), {
-        phoneNumber: formData.phoneNumber
-      });
+      try {
+        await updateDoc(doc(db, 'users', actualUserId), {
+          phoneNumber: formData.phoneNumber
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.UPDATE, `users/${actualUserId}`);
+      }
       setSuccess("Profile updated successfully!");
     } catch (err: any) {
       console.error("Personal save error:", err);
@@ -510,7 +533,7 @@ const Profile: React.FC = () => {
     );
   }
 
-  const isLocked = !isAdmin && settings?.playerEditsLocked === true;
+  const isLocked = !isAdmin && !isModerator && settings?.profileEditsEnabled === false;
 
   if (!team && !loading) {
     return (
@@ -559,7 +582,7 @@ const Profile: React.FC = () => {
             {isLocked && (
               <div className="mt-4 bg-yellow-500/10 border border-yellow-500/50 text-yellow-500 p-4 rounded-xl flex items-center gap-3">
                 <Lock size={20} />
-                <p className="text-sm font-bold uppercase">PROFILE EDITING IS LOCKED BY ADMIN.</p>
+                <p className="text-sm font-bold uppercase">PROFILE EDITING IS DISABLED BY ADMIN.</p>
               </div>
             )}
             
@@ -707,7 +730,7 @@ const Profile: React.FC = () => {
         {isLocked && (
           <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs">
             <Lock size={20} />
-            PROFILE EDITING IS CURRENTLY LOCKED BY ADMIN
+            PROFILE EDITING IS CURRENTLY DISABLED BY ADMIN
           </div>
         )}
 

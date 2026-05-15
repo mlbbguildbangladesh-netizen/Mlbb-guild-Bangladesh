@@ -76,7 +76,12 @@ const Home: React.FC = () => {
       });
       setLoading(false);
     }, (error) => {
-      console.error("Registrations activity error:", error);
+      // Use the official error handler for consistent reporting
+      try {
+        handleFirestoreError(error, OperationType.LIST, 'registrations');
+      } catch (e) {
+        console.error("Registrations activity error:", e);
+      }
     });
 
     const liveLinksQuery = query(collection(db, 'live_links'), orderBy('order', 'asc'));

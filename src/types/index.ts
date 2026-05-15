@@ -76,6 +76,7 @@ export interface Transaction {
   diamonds: number;
   reason: string;
   timestamp: string;
+  allowedViewerUids?: string[];
 }
 
 export interface Registration {
@@ -233,7 +234,7 @@ export interface AppSetting {
   aboutTitle?: string;
   aboutDescription?: string;
   features?: { title: string; icon: string; desc: string; enabled: boolean }[];
-  playerEditsLocked?: boolean;
+  profileEditsEnabled?: boolean;
   authorizedRecruiters?: string[];
   moderatorPermissions?: Record<string, string[]>;
   adminUids?: string[];

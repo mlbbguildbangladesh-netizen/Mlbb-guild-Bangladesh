@@ -479,6 +479,7 @@ async function startServer() {
         const transRef = getAdminDb().collection('transactions').doc();
         transaction.set(transRef, {
           teamId,
+          ownerId: userData.ownerId || teamId || userId,
           type: 'shop',
           points: 0,
           diamonds: -shopItem.price,
@@ -553,6 +554,7 @@ async function startServer() {
         const transRef = getAdminDb().collection('transactions').doc();
         transaction.set(transRef, {
           teamId,
+          ownerId: currentData.ownerId || teamId,
           type: 'shop',
           points: -500,
           diamonds: 0,
@@ -890,6 +892,34 @@ async function startServer() {
       res.json({ users });
     } catch (err: any) {
       console.error('[AdminAPI] List auth users error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // API Route: Impersonate User
+  app.post('/api/admin/impersonate', verifyAdmin, async (req, res) => {
+    const { uid } = req.body;
+    if (!uid) return res.status(400).json({ error: 'Missing target UID' });
+
+    try {
+      const db = getAdminDb();
+      const settingsSnap = await db.collection('settings').doc('global').get();
+      const settings = settingsSnap.exists ? settingsSnap.data()! : {};
+
+      if (!settings.maintenanceMode) {
+        return res.status(403).json({ error: 'Maintenance mode must be active to use impersonation.' });
+      }
+
+      const adminAuthCheck = canPerformAdminAuth();
+      if (!adminAuthCheck.allowed) {
+        return res.status(500).json({ error: adminAuthCheck.reason });
+      }
+
+      console.log(`[AdminAPI] Generating custom token for impersonation: ${uid}`);
+      const customToken = await getAdminAuth().createCustomToken(uid);
+      res.json({ token: customToken });
+    } catch (err: any) {
+      console.error('[AdminAPI] Impersonation error:', err);
       res.status(500).json({ error: err.message });
     }
   });

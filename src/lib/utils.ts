@@ -216,16 +216,23 @@ export const recordMatchResult = async (
   });
 
   // Record Transactions
+  const teamAMembers = teamAData.players || [];
+  const teamBMembers = teamBData.players || [];
+  const teamAAllowed = [...new Set([teamAData.ownerId || teamAId, ...teamAMembers])].filter(Boolean) as string[];
+  const teamBAllowed = [...new Set([teamBData.ownerId || teamBId, ...teamBMembers])].filter(Boolean) as string[];
+
   if (pointsA !== 0 || diamondsA !== 0) {
     const transARef = doc(collection(db, 'transactions'));
     batch.set(transARef, {
       teamId: teamAId,
+      ownerId: teamAData.ownerId || teamAId,
       type: pointsA > 0 ? 'win' : 'loss',
       points: pointsA,
       diamonds: diamondsA,
       reason: `Match vs ${teamBData.teamName}`,
       timestamp,
-      performedByEmail: auth.currentUser?.email || 'System'
+      performedByEmail: auth.currentUser?.email || 'System',
+      allowedViewerUids: teamAAllowed
     });
   }
 
@@ -233,12 +240,14 @@ export const recordMatchResult = async (
     const transBRef = doc(collection(db, 'transactions'));
     batch.set(transBRef, {
       teamId: teamBId,
+      ownerId: teamBData.ownerId || teamBId,
       type: pointsB > 0 ? 'win' : 'loss',
       points: pointsB,
       diamonds: diamondsB,
       reason: `Match vs ${teamAData.teamName}`,
       timestamp,
-      performedByEmail: auth.currentUser?.email || 'System'
+      performedByEmail: auth.currentUser?.email || 'System',
+      allowedViewerUids: teamBAllowed
     });
   }
 

@@ -269,10 +269,10 @@ const MaintenanceCountdown: React.FC<{ endTime: string }> = ({ endTime }) => {
 };
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { settings, isAdmin, user } = useAuth();
+  const { settings, isAdmin, isModerator, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const isMaintenance = settings?.maintenanceMode && !isAdmin && location.pathname !== '/login';
+  const isMaintenance = settings?.maintenanceMode && !isAdmin && !isModerator && location.pathname !== '/login';
 
   return (
     <div className="min-h-screen pt-20 pb-10 relative overflow-x-hidden">
