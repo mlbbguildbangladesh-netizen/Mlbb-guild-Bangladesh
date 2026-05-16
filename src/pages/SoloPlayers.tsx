@@ -781,16 +781,16 @@ export default function SoloPlayers() {
                         <a 
                           href={`https://wa.me/${player.whatsapp.replace(/\D/g, '')}`}
                           target="_blank"
-                          rel="no-referrer"
+                          rel="noopener noreferrer"
                           className="flex items-center justify-center gap-2 py-3 bg-neon-green/10 border border-neon-green/20 text-neon-green rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-neon-green/20 transition-all"
                         >
                           <MessageSquare size={14} />
                           WHATSAPP
                         </a>
                         <a 
-                          href={player.fbLink}
+                          href={player.fbLink.startsWith('http') ? player.fbLink : `https://${player.fbLink}`}
                           target="_blank"
-                          rel="no-referrer"
+                          rel="noopener noreferrer"
                           className="flex items-center justify-center gap-2 py-3 bg-[#1877F2]/10 border border-[#1877F2]/20 text-[#1877F2] rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-[#1877F2]/20 transition-all"
                         >
                           <Facebook size={14} />

@@ -72,7 +72,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 import { Registration, Team, MatchResultType, AppSetting, Transaction, LiveLink } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Check, X, Shield, Users, Sword, Swords, TrendingUp, History, Filter, Eye, AlertCircle, AlertTriangle, Download, Settings, Lock, Unlock, User as UserIcon, Plus, Minus, Bot, Send, Trash, Loader2, Calendar, KeyRound, Search, CheckCircle2, FileText, Copy, Youtube, Image } from 'lucide-react';
+import { Check, X, Shield, Users, Sword, Swords, TrendingUp, History, Filter, Eye, AlertCircle, AlertTriangle, Download, Settings, Lock, Unlock, User as UserIcon, Plus, Minus, Bot, Send, Trash, Loader2, Calendar, KeyRound, Search, CheckCircle2, FileText, Copy, Youtube, Image, Diamond } from 'lucide-react';
 import { recordMatchResult } from '../lib/utils';
 import { FormBuilder } from '../components/FormBuilder';
 import SchedulesAdmin from '../components/SchedulesAdmin';
@@ -406,9 +406,25 @@ const Admin: React.FC = () => {
   const toggleSetting = async (key: keyof Omit<AppSetting, 'id'>) => {
     if (!settings) return;
     
-    // For visibility flags and profile edits, default to true if undefined
+    // Default to true for visibility toggles and registration features if undefined
+    const keysThatDefaultToTrue = [
+      'registrationEnabled',
+      'showHeroSection',
+      'showScheduleSection',
+      'showFeaturesSection',
+      'showAboutSection',
+      'showShop',
+      'showLeaderboard',
+      'showChallenges',
+      'showDiamonds',
+      'showSoloPlayers',
+      'allowSoloRegistration',
+      'allowOldTeamRegistration',
+      'profileEditsEnabled'
+    ];
+
     const currentValue = settings[key] === undefined 
-      ? (key.toString().startsWith('show') || key === 'profileEditsEnabled' ? true : false)
+      ? (keysThatDefaultToTrue.includes(key as string) || key.toString().startsWith('show') ? true : false)
       : settings[key];
       
     const newValue = !currentValue;
@@ -419,12 +435,14 @@ const Admin: React.FC = () => {
         [key]: newValue
       });
       setEditSettings(prev => ({ ...prev, [key]: newValue }));
+      toast.success(`${key.replace(/([A-Z])/g, ' $1').toUpperCase()} updated.`);
     } catch (err) {
       console.error(err);
       await setDoc(doc(db, 'settings', 'global'), {
         [key]: newValue
       }, { merge: true });
       setEditSettings(prev => ({ ...prev, [key]: newValue }));
+      toast.success(`${key.replace(/([A-Z])/g, ' $1').toUpperCase()} updated (created).`);
     }
   };
 
@@ -2986,30 +3004,86 @@ const Admin: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Toggles */}
                 <div className="space-y-4">
-                  <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4">System Overrides</h3>
+                  <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4">Core Registration & Rules</h3>
                   
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Public Registration</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Team registrations</p>
+                      <p className="text-[11px] font-black uppercase tracking-tight">Public Team Registration</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Enable new guild applications</p>
                     </div>
                     <button 
                       onClick={() => toggleSetting('registrationEnabled')}
                       className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[9px] transition-all ${
-                        settings?.registrationEnabled
+                        settings?.registrationEnabled !== false
                         ? 'bg-neon-green/20 text-neon-green border border-neon-green/50' 
                         : 'bg-neon-red/20 text-neon-red border border-neon-red/50'
                       }`}
                     >
-                      {settings?.registrationEnabled ? <Unlock size={12} /> : <Lock size={12} />}
-                      {settings?.registrationEnabled ? 'OPEN' : 'CLOSED'}
+                      {settings?.registrationEnabled !== false ? <Unlock size={12} /> : <Lock size={12} />}
+                      {settings?.registrationEnabled !== false ? 'OPEN' : 'CLOSED'}
                     </button>
                   </div>
-  
+
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Challenge Round</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Lock challenge system</p>
+                      <p className="text-[11px] font-black uppercase tracking-tight">Solo Mercenary Registration</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Enable individual/mercenary signups</p>
+                    </div>
+                    <button 
+                      onClick={() => toggleSetting('allowSoloRegistration')}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[9px] transition-all ${
+                        settings?.allowSoloRegistration !== false
+                        ? 'bg-neon-green/20 text-neon-green border border-neon-green/50' 
+                        : 'bg-neon-red/20 text-neon-red border border-neon-red/50'
+                      }`}
+                    >
+                      {settings?.allowSoloRegistration !== false ? <Unlock size={12} /> : <Lock size={12} />}
+                      {settings?.allowSoloRegistration !== false ? 'OPEN' : 'CLOSED'}
+                    </button>
+                  </div>
+   
+                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-black uppercase tracking-tight">Former Team Registration</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Allow "Old Team" section for seasoned guilds</p>
+                    </div>
+                    <button 
+                      onClick={() => toggleSetting('allowOldTeamRegistration')}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[9px] transition-all ${
+                        settings?.allowOldTeamRegistration !== false
+                        ? 'bg-neon-green/20 text-neon-green border border-neon-green/50' 
+                        : 'bg-neon-red/20 text-neon-red border border-neon-red/50'
+                      }`}
+                    >
+                      {settings?.allowOldTeamRegistration !== false ? <Check size={12} /> : <X size={12} />}
+                      {settings?.allowOldTeamRegistration !== false ? 'ENABLED' : 'DISABLED'}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-black uppercase tracking-tight">Roster Management</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Allow users to update team info & leader card</p>
+                    </div>
+                    <button 
+                      onClick={() => toggleSetting('profileEditsEnabled')}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[9px] transition-all ${
+                        settings?.profileEditsEnabled !== false
+                        ? 'bg-neon-green/20 text-neon-green border border-neon-green/50' 
+                        : 'bg-neon-red/20 text-neon-red border border-neon-red/50'
+                      }`}
+                    >
+                      {settings?.profileEditsEnabled !== false ? <Unlock size={12} /> : <Lock size={12} />}
+                      {settings?.profileEditsEnabled !== false ? 'ACTIVATED' : 'DEACTIVATED'}
+                    </button>
+                  </div>
+
+                  <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-6 mb-4">Challenge & Betting System</h3>
+   
+                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-black uppercase tracking-tight">Challenge Round State</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Freeze all challenge actions</p>
                     </div>
                     <button 
                       onClick={() => toggleSetting('challengePhaseLocked')}
@@ -3026,63 +3100,44 @@ const Admin: React.FC = () => {
 
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Profile Edit Option</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Activate/Deactivate user profile and roster edits</p>
+                      <p className="text-[11px] font-black uppercase tracking-tight">Diamond Betting</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Toggle Bet field in challenges</p>
                     </div>
                     <button 
-                      onClick={() => toggleSetting('profileEditsEnabled')}
+                      onClick={() => toggleSetting('bettingEnabled')}
                       className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[9px] transition-all ${
-                        settings?.profileEditsEnabled 
+                        settings?.bettingEnabled
                         ? 'bg-neon-green/20 text-neon-green border border-neon-green/50' 
-                        : 'bg-neon-red/20 text-neon-red border border-neon-red/50'
+                        : 'bg-white/10 text-gray-400 border border-white/10'
                       }`}
                     >
-                      {settings?.profileEditsEnabled ? <Unlock size={12} /> : <Lock size={12} />}
-                      {settings?.profileEditsEnabled ? 'ACTIVATED' : 'DEACTIVATED'}
-                    </button>
-                  </div>
-  
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-                    <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Old Team Registration</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">"Old Team" section</p>
-                    </div>
-                    <button 
-                      onClick={() => toggleSetting('allowOldTeamRegistration')}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[9px] transition-all ${
-                        settings?.allowOldTeamRegistration
-                        ? 'bg-neon-green/20 text-neon-green border border-neon-green/50' 
-                        : 'bg-neon-red/20 text-neon-red border border-neon-red/50'
-                      }`}
-                    >
-                      {settings?.allowOldTeamRegistration ? <Check size={12} /> : <X size={12} />}
-                      {settings?.allowOldTeamRegistration ? 'ENABLED' : 'DISABLED'}
+                      <Diamond size={12} />
+                      {settings?.bettingEnabled ? 'ENABLED' : 'DISABLED'}
                     </button>
                   </div>
 
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Team Logo Section</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Show/Hide Logo Upload</p>
+                      <p className="text-[11px] font-black uppercase tracking-tight">Match Limit Per Team</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Max challenges per team</p>
                     </div>
-                    <button 
-                      onClick={() => toggleSetting('hideLogoUpload')}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[9px] transition-all ${
-                        !settings?.hideLogoUpload
-                        ? 'bg-neon-green/20 text-neon-green border border-neon-green/50' 
-                        : 'bg-neon-red/20 text-neon-red border border-neon-red/50'
-                      }`}
-                    >
-                      {!settings?.hideLogoUpload ? <Check size={12} /> : <X size={12} />}
-                      {!settings?.hideLogoUpload ? 'SHOWN' : 'HIDDEN'}
-                    </button>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editSettings.challengeLimitPerUser ?? settings?.challengeLimitPerUser ?? ''}
+                      placeholder="e.g. 10"
+                      onChange={(e) => setEditSettings({ ...editSettings, challengeLimitPerUser: e.target.value ? parseInt(e.target.value) : undefined })}
+                      className="w-32 bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs focus:ring-1 focus:ring-neon-blue outline-none text-right"
+                    />
                   </div>
+
+                  <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-6 mb-4">Advanced UI & Maintenance</h3>
 
                   <div className="flex flex-col gap-3 p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
-                        <p className="text-[11px] font-black uppercase tracking-tight">Maintenance Mode</p>
-                        <p className="text-[8px] text-gray-500 font-bold uppercase">Redirect users to notice</p>
+                        <p className="text-[11px] font-black uppercase tracking-tight">Global Maintenance</p>
+                        <p className="text-[8px] text-gray-500 font-bold uppercase">Lock whole site for maintenance</p>
                       </div>
                       <button 
                         onClick={toggleMaintenance}
@@ -3100,7 +3155,7 @@ const Admin: React.FC = () => {
                     {!settings?.maintenanceMode && (
                       <div className="flex items-center gap-4 bg-black/30 p-2 rounded-lg border border-white/5">
                         <div className="flex-1 space-y-1">
-                          <label className="text-[9px] font-black text-gray-500 uppercase">Duration (Hours)</label>
+                          <label className="text-[9px] font-black text-gray-500 uppercase">Hours</label>
                           <input 
                             type="number" 
                             min="0"
@@ -3110,7 +3165,7 @@ const Admin: React.FC = () => {
                           />
                         </div>
                         <div className="flex-1 space-y-1">
-                          <label className="text-[9px] font-black text-gray-500 uppercase">Duration (Mins)</label>
+                          <label className="text-[9px] font-black text-gray-500 uppercase">Mins</label>
                           <input 
                             type="number" 
                             min="0"
@@ -3122,37 +3177,23 @@ const Admin: React.FC = () => {
                         </div>
                       </div>
                     )}
-
-                    {settings?.maintenanceMode && settings?.maintenanceEndTime && (
-                      <div className="space-y-1">
-                        <div className="text-[10px] font-black text-neon-red uppercase flex items-center gap-2">
-                          <span className="animate-pulse">TERMINAL DOWNTIME REMAINING:</span>
-                          <span className="font-mono text-xs">
-                            <Countdown endTime={settings.maintenanceEndTime} />
-                          </span>
-                        </div>
-                        <div className="text-[8px] text-gray-500 font-bold uppercase italic">
-                          Target Uplink: {new Date(settings.maintenanceEndTime).toLocaleString()}
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Betting Feature</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Toggle Bet field in challenges</p>
+                      <p className="text-[11px] font-black uppercase tracking-tight">Force Logo Upload</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Show/Hide Logo Upload in registration</p>
                     </div>
                     <button 
-                      onClick={() => toggleSetting('bettingEnabled')}
+                      onClick={() => toggleSetting('hideLogoUpload')}
                       className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[9px] transition-all ${
-                        settings?.bettingEnabled
+                        !settings?.hideLogoUpload
                         ? 'bg-neon-green/20 text-neon-green border border-neon-green/50' 
-                        : 'bg-white/10 text-gray-400 border border-white/10'
+                        : 'bg-neon-red/20 text-neon-red border border-neon-red/50'
                       }`}
                     >
-                      <Check size={12} />
-                      {settings?.bettingEnabled ? 'ENABLED' : 'DISABLED'}
+                      {!settings?.hideLogoUpload ? <Check size={12} /> : <X size={12} />}
+                      {!settings?.hideLogoUpload ? 'SHOWN' : 'HIDDEN'}
                     </button>
                   </div>
 
@@ -3161,7 +3202,6 @@ const Admin: React.FC = () => {
                       <Lock size={14} />
                       <h3 className="text-[10px] font-black uppercase tracking-widest">Master Reset Tools</h3>
                     </div>
-                    <p className="text-[9px] text-gray-500 font-bold uppercase">Permanently clear database sections. USE WITH CAUTION.</p>
                     <button 
                       onClick={() => setShowResetModal(true)}
                       className="w-full py-3 bg-neon-red/10 border border-neon-red/20 text-neon-red rounded-lg text-[10px] font-black hover:bg-neon-red/20 transition-all uppercase tracking-widest"
@@ -3170,12 +3210,12 @@ const Admin: React.FC = () => {
                     </button>
                   </div>
 
-                  <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-6 mb-4">Core Navigation</h3>
+                  <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-6 mb-4">Visibility & Navigation</h3>
 
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Leaderboard Page</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Toggle visibility in Navbar & Home</p>
+                      <p className="text-[11px] font-black uppercase tracking-tight">Leaderboard Visibility</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Main page ranking section</p>
                     </div>
                     <button 
                       onClick={() => toggleSetting('showLeaderboard')}
@@ -3192,8 +3232,8 @@ const Admin: React.FC = () => {
 
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Challenges Page</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Toggle visibility in Navbar & Home</p>
+                      <p className="text-[11px] font-black uppercase tracking-tight">Challenges Visibility</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Challenge system access</p>
                     </div>
                     <button 
                       onClick={() => toggleSetting('showChallenges')}
@@ -3210,26 +3250,8 @@ const Admin: React.FC = () => {
 
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Profile Editing</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Allow users to update team info & leader card</p>
-                    </div>
-                    <button 
-                      onClick={() => toggleSetting('profileEditsEnabled')}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[9px] transition-all ${
-                        settings?.profileEditsEnabled !== false
-                        ? 'bg-neon-green/20 text-neon-green border border-neon-green/50' 
-                        : 'bg-neon-red/20 text-neon-red border border-neon-red/50'
-                      }`}
-                    >
-                      {settings?.profileEditsEnabled !== false ? <Eye size={12} /> : <X size={12} />}
-                      {settings?.profileEditsEnabled !== false ? 'ENABLED' : 'DISABLED'}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-                    <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Solo Players Page</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Toggle visibility in Navbar</p>
+                      <p className="text-[11px] font-black uppercase tracking-tight">Solo Mercenaries Link</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Navbar link for recruitment</p>
                     </div>
                     <button 
                       onClick={() => toggleSetting('showSoloPlayers')}
@@ -3246,26 +3268,8 @@ const Admin: React.FC = () => {
 
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Solo Registration</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Enable/Disable new mercenary profiles</p>
-                    </div>
-                    <button 
-                      onClick={() => toggleSetting('allowSoloRegistration')}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[9px] transition-all ${
-                        settings?.allowSoloRegistration !== false
-                        ? 'bg-neon-green/20 text-neon-green border border-neon-green/50' 
-                        : 'bg-neon-red/20 text-neon-red border border-neon-red/50'
-                      }`}
-                    >
-                      {settings?.allowSoloRegistration !== false ? <Eye size={12} /> : <X size={12} />}
-                      {settings?.allowSoloRegistration !== false ? 'ENABLED' : 'DISABLED'}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-                    <div className="space-y-1">
                       <p className="text-[11px] font-black uppercase tracking-tight">Diamonds Display</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Show/Hide balance in Navbar for users</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Show/Hide balance in Navbar</p>
                     </div>
                     <button 
                       onClick={() => toggleSetting('showDiamonds')}
@@ -3283,7 +3287,7 @@ const Admin: React.FC = () => {
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="space-y-1">
                       <p className="text-[11px] font-black uppercase tracking-tight">Hero Section</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Top banner & logo</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Home welcome banners</p>
                     </div>
                     <button 
                       onClick={() => toggleSetting('showHeroSection')}
@@ -3300,8 +3304,8 @@ const Admin: React.FC = () => {
 
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Schedule Section</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Upcoming matches</p>
+                      <p className="text-[11px] font-black uppercase tracking-tight">Home Schedule List</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Upcoming matches summary</p>
                     </div>
                     <button 
                       onClick={() => toggleSetting('showScheduleSection')}
@@ -3318,8 +3322,8 @@ const Admin: React.FC = () => {
 
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Features Section</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Trophies, Leaderboard features</p>
+                      <p className="text-[11px] font-black uppercase tracking-tight">Feature Cards</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Tournament feature highlights</p>
                     </div>
                     <button 
                       onClick={() => toggleSetting('showFeaturesSection')}
@@ -3336,8 +3340,8 @@ const Admin: React.FC = () => {
 
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">About Section</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Bottom text description</p>
+                      <p className="text-[11px] font-black uppercase tracking-tight">About Bio Section</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Guild mission statement</p>
                     </div>
                     <button 
                       onClick={() => toggleSetting('showAboutSection')}
@@ -3354,8 +3358,8 @@ const Admin: React.FC = () => {
 
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Shop Link</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Toggle visibility in Navbar</p>
+                      <p className="text-[11px] font-black uppercase tracking-tight">Marketplace Link</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Access to guild shop</p>
                     </div>
                     <button 
                       onClick={() => toggleSetting('showShop')}
@@ -3368,39 +3372,6 @@ const Admin: React.FC = () => {
                       {settings?.showShop !== false ? <Eye size={12} /> : <X size={12} />}
                       {settings?.showShop !== false ? 'VISIBLE' : 'HIDDEN'}
                     </button>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-                    <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Shop Section</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Guild Shop/Marketplace</p>
-                    </div>
-                    <button 
-                      onClick={() => toggleSetting('showShop')}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[9px] transition-all ${
-                        settings?.showShop !== false
-                        ? 'bg-neon-green/20 text-neon-green border border-neon-green/50' 
-                        : 'bg-neon-red/20 text-neon-red border border-neon-red/50'
-                      }`}
-                    >
-                      {settings?.showShop !== false ? <Eye size={12} /> : <X size={12} />}
-                      {settings?.showShop !== false ? 'VISIBLE' : 'HIDDEN'}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-                    <div className="space-y-1">
-                      <p className="text-[11px] font-black uppercase tracking-tight">Challenge Limit</p>
-                      <p className="text-[8px] text-gray-500 font-bold uppercase">Max challenges per team</p>
-                    </div>
-                    <input
-                      type="number"
-                      min="0"
-                      value={editSettings.challengeLimitPerUser ?? settings?.challengeLimitPerUser ?? ''}
-                      placeholder="e.g. 10 (0 for unlimited)"
-                      onChange={(e) => setEditSettings({ ...editSettings, challengeLimitPerUser: e.target.value ? parseInt(e.target.value) : undefined })}
-                      className="w-48 bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-sm focus:ring-1 focus:ring-neon-blue outline-none text-right"
-                    />
                   </div>
                 </div>
 
