@@ -459,16 +459,26 @@ const Admin: React.FC = () => {
           return;
         }
         const endTime = new Date(Date.now() + totalMinutes * 60000);
-        await updateDoc(settingsRef, {
+        const data = {
           maintenanceMode: true,
           maintenanceEndTime: endTime.toISOString()
-        });
+        };
+        try {
+          await updateDoc(settingsRef, data);
+        } catch (e) {
+          await setDoc(settingsRef, data, { merge: true });
+        }
         toast.success(`Maintenance enabled for ${maintHours}h ${maintMins}m`);
       } else {
-        await updateDoc(settingsRef, {
+        const data = {
           maintenanceMode: false,
           maintenanceEndTime: null
-        });
+        };
+        try {
+          await updateDoc(settingsRef, data);
+        } catch (e) {
+          await setDoc(settingsRef, data, { merge: true });
+        }
         toast.success("Maintenance disabled.");
       }
     } catch (err) {
@@ -531,6 +541,7 @@ const Admin: React.FC = () => {
         streak: 0,
         upgradeLevel: 1,
         rank: 'E',
+        matchesThisSeason: 0,
         players: reg.players,
         registrationStatus: 'approved',
         uniqueId: reg.uniqueId || Math.random().toString(36).substring(2, 9).toUpperCase(),

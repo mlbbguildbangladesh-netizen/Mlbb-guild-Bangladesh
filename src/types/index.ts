@@ -57,7 +57,6 @@ export interface Team {
 }
 
 export const MATCH_SLOTS = ["20:00", "20:30", "21:00", "21:30", "22:00"] as const;
-export const MAX_SEASON_MATCHES = 10;
 
 export interface Match {
   id: string;
@@ -128,7 +127,8 @@ export interface ScheduleMatch {
   time: string;
   firstPick: string;
   status: 'upcoming' | 'live' | 'completed' | 'cancelled';
-  matchType?: 'official' | 'challenge';
+  matchType?: 'official' | 'challenge' | 'seasonal';
+  bet?: number;
   matchDetails?: {
     winnerId: string;
     resultType: MatchResultType;

@@ -111,7 +111,16 @@
         "date": { "type": "string" },
         "time": { "type": "string" },
         "firstPick": { "type": "string" },
+        "matchType": { "type": "string", "enum": ["official", "challenge"] },
+        "bet": { "type": "number" },
         "status": { "type": "string", "enum": ["upcoming", "completed", "cancelled"] },
+        "matchDetails": {
+          "type": "object",
+          "properties": {
+            "winnerId": { "type": "string" },
+            "resultType": { "type": "string" }
+          }
+        },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["team1Name", "team2Name", "date", "time", "firstPick", "status"]
@@ -214,7 +223,9 @@
       "type": "object",
       "properties": {
         "challengePhaseLocked": { "type": "boolean" },
-        "allowOldTeamRegistration": { "type": "boolean" }
+        "allowOldTeamRegistration": { "type": "boolean" },
+        "challengeLimitPerUser": { "type": "number" },
+        "maintenanceMode": { "type": "boolean" }
       },
       "required": ["challengePhaseLocked", "allowOldTeamRegistration"]
     }

@@ -47,7 +47,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { Team, Challenge, AppSetting, ChallengeDetails, ScheduleMatch, Transaction, MATCH_SLOTS, MAX_SEASON_MATCHES } from '../types';
+import { Team, Challenge, AppSetting, ChallengeDetails, ScheduleMatch, Transaction, MATCH_SLOTS } from '../types';
 import CountdownTimer from '../components/CountdownTimer';
 import { FALLBACK_IMAGE } from '../lib/utils';
 import { ImageWithFallback } from '../components/ImageWithFallback';
@@ -251,8 +251,9 @@ const Challenges: React.FC = () => {
     }
 
     // Rule: Season Match Limit
-    if ((currentTeam.matchesThisSeason || 0) >= MAX_SEASON_MATCHES) {
-      toast.error(`Your team has reached the limit of ${MAX_SEASON_MATCHES} matches this season.`);
+    const limit = settings?.challengeLimitPerUser || 10;
+    if ((currentTeam.matchesThisSeason || 0) >= limit) {
+      toast.error("Limit Reached");
       return;
     }
 
@@ -296,8 +297,8 @@ const Challenges: React.FC = () => {
       console.error("Booking check error:", err);
     }
 
-    if (targetTeam && (targetTeam.matchesThisSeason || 0) >= MAX_SEASON_MATCHES) {
-      toast.error("The opponent team has reached their season match limit.");
+    if (targetTeam && (targetTeam.matchesThisSeason || 0) >= limit) {
+      toast.error("Opponent Limit Reached");
       return;
     }
 
@@ -361,7 +362,6 @@ const Challenges: React.FC = () => {
       setTimePickerTeam(null);
       setSelectedTime('');
       setSelectedDate('');
-      setSelectedBet('');
       setSelectedPick('');
       toast.success("Challenge sent successfully!");
 
@@ -418,36 +418,77 @@ const Challenges: React.FC = () => {
   const handleReject = async (challenge: Challenge) => {
     if (!currentTeam) return;
     try {
+      // 10 point penalty for declining as per user request
+      const penaltyAmount = 10;
+      const currentPoints = currentTeam.points || 0;
+      const newPoints = Math.max(0, currentPoints - penaltyAmount);
+
+      const batch = writeBatch(db);
+      
+      // Update Team points
+      const teamRef = doc(db, 'teams', currentTeam.id);
+      batch.update(teamRef, { points: newPoints });
+
+      // Sync to User owner
+      if (currentTeam.ownerId) {
+        const userRef = doc(db, 'users', currentTeam.ownerId);
+        batch.update(userRef, { points: newPoints });
+      }
+
+      // Add Transaction
+      const transRef = doc(collection(db, 'transactions'));
+      batch.set(transRef, {
+        teamId: currentTeam.id,
+        ownerId: currentTeam.ownerId || currentTeam.id,
+        type: 'penalty',
+        points: -penaltyAmount,
+        diamonds: 0,
+        reason: 'Declined Incoming Challenge',
+        timestamp: serverTimestamp(),
+        performedByEmail: auth.currentUser?.email || 'System',
+        allowedViewerUids: [currentTeam.ownerId || currentTeam.id, ...(currentTeam.players || [])].filter(Boolean)
+      });
+
       const challengeRef = doc(db, 'challenges', challenge.id);
       const newTargets = (challenge?.targetTeamIds || []).filter(id => id !== currentTeam.id);
       
       if (newTargets.length === 0) {
-        await deleteDoc(challengeRef);
+        batch.delete(challengeRef);
       } else {
         const newDetails = { ...(challenge.challengeDetails || {}) };
         delete newDetails[currentTeam.id];
         
-        await updateDoc(challengeRef, {
+        batch.update(challengeRef, {
           targetTeamIds: newTargets,
           challengeDetails: newDetails
         });
       }
-      toast.success("Challenge rejected.");
+      
+      await batch.commit();
 
-      // Notify challenger
+      // Notify challenger about rejection and point loss
       const fromTeam = teams.find(t => t.id === challenge.fromTeamId);
       if (fromTeam?.ownerId) {
         await createNotification(
           fromTeam.ownerId,
-          'Challenge Rejected',
-          `${currentTeam?.teamName || 'The team'} has rejected your challenge.`,
+          'Challenge Declined',
+          `${currentTeam?.teamName || 'The team'} has declined your challenge. They lost ${penaltyAmount} points as a penalty.`,
           'challenge',
           '/challenges'
         );
       }
+
+      // Notify the current team members (voluntary)
+      await createNotification(
+        currentTeam.ownerId!,
+        'Challenge Declined (Penalty)',
+        `You declined ${fromTeam?.teamName || 'a'} challenge. -${penaltyAmount} points deducted.`,
+        'system',
+        '/challenges'
+      );
     } catch (err) {
       console.error(err);
-      toast.error("Failed to reject challenge.");
+      toast.error("Failed to decline challenge.");
     }
   };
 
@@ -663,8 +704,14 @@ const Challenges: React.FC = () => {
             {currentTeam ? (
               <div className="grid lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-2xl font-black uppercase tracking-tight italic">OUTGOING <span className="text-neon-blue">REQUESTS</span></h2>
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-1">
+                    <div className="space-y-2">
+                      <h2 className="text-2xl font-black uppercase tracking-tight italic">OUTGOING <span className="text-neon-blue">REQUESTS</span></h2>
+                      <div className="flex items-center gap-2 text-[10px] font-black uppercase text-gray-500">
+                        <Swords size={12} className="text-neon-blue" />
+                        Match Limit: <span className="text-white">{currentTeam.matchesThisSeason || 0}</span> / {settings?.challengeLimitPerUser || 10} Played
+                      </div>
+                    </div>
                     {userChallenge && isLeader && (
                       <button 
                         onClick={() => handleWithdraw()}
@@ -702,17 +749,12 @@ const Challenges: React.FC = () => {
                               <div>
                                 <h4 className="font-black text-lg uppercase leading-none">{targetTeam?.teamName || 'Unknown'}</h4>
                                 <div className="flex items-center gap-3 mt-2">
-                                  <div className="flex items-center gap-1 text-[10px] font-bold text-gray-500">
+                                  <div className="flex items-center gap-2">
                                     <Clock size={10} /> {details?.time || 'TBD'}
                                   </div>
-                                  <div className="flex items-center gap-1 text-[10px] font-bold text-gray-500">
+                                  <div className="flex items-center gap-2">
                                     <Calendar size={10} /> {details?.date || 'TBD'}
                                   </div>
-                                  {settings?.bettingEnabled && details?.bet && (
-                                    <div className="flex items-center gap-1 text-[10px] font-bold text-neon-cyan">
-                                      <Diamond size={10} /> {details.bet} BET
-                                    </div>
-                                  )}
                                 </div>
                               </div>
                             </div>
@@ -763,12 +805,6 @@ const Challenges: React.FC = () => {
                                <span>Date</span>
                                <span className="text-white">{details?.date}</span>
                              </div>
-                             {settings?.bettingEnabled && details?.bet && (
-                               <div className="flex justify-between items-center text-[10px] font-bold uppercase text-gray-400">
-                                 <span>Resources Bet</span>
-                                 <span className="text-neon-cyan font-black tracking-widest">{details.bet} DIA</span>
-                               </div>
-                             )}
                           </div>
 
                           <div className="grid grid-cols-2 gap-3">
@@ -789,46 +825,59 @@ const Challenges: React.FC = () => {
                                     return;
                                   }
 
-                                  // Rule: Season Match Limit check for acceptance
-                                  if ((currentTeam.matchesThisSeason || 0) >= MAX_SEASON_MATCHES) {
-                                    toast.error("Your team has reached the season match limit.");
-                                    return;
-                                  }
-                                  if ((fromTeam.matchesThisSeason || 0) >= MAX_SEASON_MATCHES) {
-                                    toast.error("The challenger has reached the season match limit.");
+                                  // Count confirmed challenge matches for this season
+                                  const limit = settings?.challengeLimitPerUser || 10;
+                                  
+                                  const getMatchCount = async (teamId: string) => {
+                                    const q1 = query(collection(db, 'schedules'), 
+                                      where('team1Id', '==', teamId), 
+                                      where('matchType', '==', 'challenge'),
+                                      where('status', '!=', 'cancelled')
+                                    );
+                                    const q2 = query(collection(db, 'schedules'), 
+                                      where('team2Id', '==', teamId), 
+                                      where('matchType', '==', 'challenge'),
+                                      where('status', '!=', 'cancelled')
+                                    );
+                                    const [s1, s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+                                    return s1.size + s2.size;
+                                  };
+
+                                  const [currentMatches, challengerMatches] = await Promise.all([
+                                    getMatchCount(currentTeam.id),
+                                    getMatchCount(fromTeam.id)
+                                  ]);
+
+                                  if (currentMatches >= limit) {
+                                    toast.error("Limit Reached");
                                     return;
                                   }
 
-                                  // Check for existing schedule between these two
-                                  const existingMatchQuery = query(
-                                    collection(db, 'schedules'),
-                                    where('team1Id', 'in', [fromTeam.id, currentTeam.id]),
+                                  if (challengerMatches >= limit) {
+                                    toast.error("Opponent Limit Reached");
+                                    return;
+                                  }
+
+                                  // Check for existing schedule between these two in this season
+                                  const qPair1 = query(collection(db, 'schedules'),
+                                    where('team1Id', '==', fromTeam.id),
+                                    where('team2Id', '==', currentTeam.id),
+                                    where('matchType', '==', 'challenge'),
                                     where('status', '!=', 'cancelled')
                                   );
-                                  const matchSnap = await getDocs(existingMatchQuery);
-                                  const hasRecentMatch = matchSnap.docs.some(doc => {
-                                    const d = doc.data();
-                                    return (d.team1Id === fromTeam.id && d.team2Id === currentTeam.id) ||
-                                           (d.team1Id === currentTeam.id && d.team2Id === fromTeam.id);
-                                  });
+                                  const qPair2 = query(collection(db, 'schedules'),
+                                    where('team1Id', '==', currentTeam.id),
+                                    where('team2Id', '==', fromTeam.id),
+                                    where('matchType', '==', 'challenge'),
+                                    where('status', '!=', 'cancelled')
+                                  );
+                                  const [pairSnap1, pairSnap2] = await Promise.all([getDocs(qPair1), getDocs(qPair2)]);
 
-                                  if (hasRecentMatch) {
-                                    toast.error("A match is already scheduled or has been played between these teams.");
+                                  if (!pairSnap1.empty || !pairSnap2.empty) {
+                                    toast.error("You have already played or have a scheduled challenge against this team this season.");
                                     return;
                                   }
 
-                                  const challengeRef = doc(db, 'challenges', currentTeam.id);
-                                  if (userChallenge) {
-                                    const newTargets = [...new Set([...(userChallenge?.targetTeamIds || []), c.fromTeamId])];
-                                    await updateDoc(challengeRef, { targetTeamIds: newTargets });
-                                  } else {
-                                    await setDoc(challengeRef, {
-                                      fromTeamId: currentTeam.id,
-                                      targetTeamIds: [c.fromTeamId],
-                                      timestamp: serverTimestamp()
-                                    });
-                                  }
-                                  
                                   // Create an official schedule entry
                                   const details = c.challengeDetails?.[currentTeam.id];
 
@@ -836,6 +885,7 @@ const Challenges: React.FC = () => {
                                   
                                   // 1. Create the schedule entry
                                   const scheduleRef = doc(collection(db, 'schedules'));
+                                  const betValue = Number(details?.bet || 0);
                                   batch.set(scheduleRef, {
                                     team1Id: c.fromTeamId,
                                     team1Name: fromTeam.teamName || 'Unknown',
@@ -845,6 +895,7 @@ const Challenges: React.FC = () => {
                                     time: details?.time || "20:00",
                                     matchType: 'challenge',
                                     status: 'upcoming',
+                                    bet: betValue,
                                     firstPick: details?.sideSelection || '1st',
                                     createdAt: serverTimestamp()
                                   });
@@ -872,14 +923,22 @@ const Challenges: React.FC = () => {
                                   }
 
                                   await batch.commit();
-                                  toast.success("CHALLENGE ACCEPTED! Match added to schedule.");
+                                  
+                                  const betAmount = details?.bet || '0';
+                                  toast.success(
+                                    `CHALLENGE ACCEPTED! Match added to schedule.\n\n` +
+                                    `📢 Winning will result in receiving +50 points and +20 diamonds.\n` +
+                                    `📢 Losing will result in subtracting -20 points and -30 diamonds.`,
+                                    { duration: 8000, icon: '⚔️' }
+                                  );
 
-                                  // Notify challenger
+                                  // Notify challenger with winning/losing terms as requested
                                   if (fromTeam?.ownerId) {
                                     await createNotification(
                                       fromTeam.ownerId,
                                       'Challenge Accepted!',
-                                      `${currentTeam.teamName} has accepted your challenge! Match added to schedule.`,
+                                      `${currentTeam.teamName} has accepted your challenge! Match added to schedule. ` +
+                                      `Winning results in receiving +50 points & +20 diamonds. Losing results in subtracting -20 points & -30 diamonds.`,
                                       'challenge',
                                       '/schedule'
                                     );
@@ -900,7 +959,7 @@ const Challenges: React.FC = () => {
                               className={`w-full py-3 ${isLeader ? 'bg-neon-red/10 border border-neon-red/20 text-neon-red' : 'bg-white/5 text-gray-500'} font-black text-[10px] uppercase tracking-widest rounded-lg hover:bg-neon-red/20 transition-all flex items-center justify-center gap-2`}
                             >
                               <X size={14} />
-                              {isLeader ? 'REJECT' : '...'}
+                              {isLeader ? 'DECLINE (-10 PTS)' : '...'}
                             </button>
                           </div>
                         </div>
@@ -983,13 +1042,6 @@ const Challenges: React.FC = () => {
                            {match.details.time}
                          </div>
                       </div>
-                      
-                      {settings?.bettingEnabled && match.details.bet && (
-                        <div className="px-6 py-2 bg-neon-cyan/10 border border-neon-cyan/30 rounded-full text-neon-cyan text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                          <Diamond size={14} />
-                          {match.details.bet} TOTAL STAKES
-                        </div>
-                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
@@ -1254,31 +1306,17 @@ const Challenges: React.FC = () => {
                     </p>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {settings?.bettingEnabled && (
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Bet Stakes</label>
-                      <input
-                        type="number"
-                        value={selectedBet}
-                        onChange={(e) => setSelectedBet(e.target.value)}
-                        placeholder="Diamonds"
-                        className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:border-neon-blue transition-all"
-                      />
-                    </div>
-                  )}
-                  <div className={`space-y-2 ${!settings?.bettingEnabled ? 'col-span-2' : ''}`}>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Pick Turn</label>
-                    <select
-                      value={selectedPick}
-                      onChange={(e) => setSelectedPick(e.target.value as any)}
-                      className="w-full bg-black border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:border-neon-blue transition-all appearance-none"
-                    >
-                      <option value="">Any</option>
-                      <option value="1st">First</option>
-                      <option value="2nd">Second</option>
-                    </select>
-                  </div>
+                <div className={`space-y-2 ${!settings?.bettingEnabled ? 'col-span-2' : 'col-span-2'}`}>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Pick Turn</label>
+                  <select
+                    value={selectedPick}
+                    onChange={(e) => setSelectedPick(e.target.value as any)}
+                    className="w-full bg-black border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:border-neon-blue transition-all appearance-none"
+                  >
+                    <option value="">Any</option>
+                    <option value="1st">First</option>
+                    <option value="2nd">Second</option>
+                  </select>
                 </div>
               </div>
 

@@ -1,13 +1,9 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
-import { fileURLToPath } from "url";
 import admin from "firebase-admin";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Configuration from firebase-applet-config.json
 const FIREBASE_API_KEY = "AIzaSyDVypzqQvQocCzi-No4E42iH-4b0tb7E5o";
@@ -84,8 +80,15 @@ function getGeminiModel() {
     genAI = new GoogleGenerativeAI(apiKey);
   }
   return genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash",
-    systemInstruction: "You are an AI Admin Helper for the MLBB Guild Bangladesh (MGB) management system. You have administrative access to the Firestore database. You can manage registrations, teams, users, settings, and transactions. Always verify your actions and be helpful."
+    model: "gemini-3-flash-preview",
+    systemInstruction: "You are the COBALT CORE AI, the central operating intelligence for the MLBB Guild Bangladesh (MGB) management system.\n" +
+      "You have administrative access to the Firestore database via built-in tools.\n" +
+      "SYSTEM ARCHITECTURE: Backend (Firebase), Frontend (React/Vite), Real-time sync enforced.\n" +
+      "OPERATIONAL PROTOCOLS:\n" +
+      "1. Respond in English or Bengali as detected.\n" +
+      "2. Tone: Professional, futuristic intelligence.\n" +
+      "3. Accuracy: Base answers on real data fetched via tools.\n" +
+      "4. Safety: Encrypt/Redact sensitive PII if necessary, but provide help to admins."
   });
 }
 
@@ -389,6 +392,7 @@ async function startServer() {
         streak: 0,
         upgradeLevel: 1,
         rank: 'E',
+        matchesThisSeason: 0,
         players: players || [],
         registrationStatus: 'approved',
         uniqueId: `MGB-${Math.floor(100000 + Math.random() * 900000)}`,
@@ -1002,4 +1006,7 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error("[CRITICAL] Server failed to start:", err);
+  process.exit(1);
+});

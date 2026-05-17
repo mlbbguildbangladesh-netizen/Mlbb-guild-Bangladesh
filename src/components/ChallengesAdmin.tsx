@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, onSnapshot, doc, deleteDoc, getDocs, where, writeBatch, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { createNotification } from '../lib/notificationUtils';
-import { Challenge, Team, ScheduleMatch, MAX_SEASON_MATCHES } from '../types';
-import { Swords, Trash, Check, X, Shield, AlertTriangle, Loader2 } from 'lucide-react';
+import { Challenge, Team, ScheduleMatch, MatchResultType } from '../types';
+import { recordMatchResult } from '../lib/utils';
+import { Swords, Trash, Check, X, Shield, AlertTriangle, Loader2, ShieldCheck, ExternalLink, Trophy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -12,8 +13,22 @@ export default function ChallengesAdmin() {
   const { settings } = useAuth();
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [scheduledChallenges, setScheduledChallenges] = useState<ScheduleMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // Result reporting state
+  const [reportingMatch, setReportingMatch] = useState<ScheduleMatch | null>(null);
+  const [reportData, setReportData] = useState({
+    winnerId: '',
+    type: 'win' as MatchResultType,
+    pointsA: 0,
+    pointsB: 0,
+    diamondsA: 0,
+    diamondsB: 0,
+    useManual: false
+  });
+  const [isReporting, setIsReporting] = useState(false);
 
   useEffect(() => {
     const unsubTeams = onSnapshot(collection(db, 'teams'), (snap) => {
@@ -25,11 +40,71 @@ export default function ChallengesAdmin() {
       setLoading(false);
     });
 
+    const challengeSchedulesQuery = query(
+      collection(db, 'schedules'),
+      where('matchType', '==', 'challenge'),
+      where('status', '!=', 'completed')
+    );
+    const unsubSchedules = onSnapshot(challengeSchedulesQuery, (snap) => {
+      setScheduledChallenges(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduleMatch)));
+    });
+
     return () => {
       unsubTeams();
       unsubChallenges();
+      unsubSchedules();
     };
   }, []);
+
+  const handleReportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportingMatch) return;
+    if (!reportData.winnerId && reportData.type !== 'rematch') {
+      toast.error("Please select a winner or result type");
+      return;
+    }
+
+    setIsReporting(true);
+    try {
+      const manualPoints = reportData.useManual ? { teamA: reportData.pointsA, teamB: reportData.pointsB } : undefined;
+      const manualDiamonds = reportData.useManual ? { teamA: reportData.diamondsA, teamB: reportData.diamondsB } : undefined;
+
+      const results = await recordMatchResult(
+        reportingMatch.team1Id || '', 
+        reportingMatch.team2Id || '', 
+        reportData.winnerId as any, 
+        reportData.type,
+        manualPoints,
+        manualDiamonds,
+        true,
+        Number(reportingMatch.bet || 0)
+      );
+
+      await updateDoc(doc(db, 'schedules', reportingMatch.id), {
+        status: 'completed',
+        matchDetails: {
+          winnerId: reportData.winnerId,
+          resultType: reportData.type,
+          pointsExchanged: { 
+            team1: results.pointsExchanged.teamA, 
+            team2: results.pointsExchanged.teamB 
+          },
+          diamondsExchanged: { 
+            team1: results.diamondsExchanged.teamA, 
+            team2: results.diamondsExchanged.teamB 
+          }
+        }
+      });
+
+      toast.success("Challenge result reported!");
+      setReportingMatch(null);
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Failed to report: " + err.message);
+    } finally {
+      setIsReporting(false);
+    }
+  };
 
   const handleForceAccept = async (challenge: Challenge, targetTeamId: string) => {
     if (processingId) return;
@@ -45,19 +120,63 @@ export default function ChallengesAdmin() {
       return;
     }
 
-    // Season Limit Check
-    if ((fromTeam.matchesThisSeason || 0) >= MAX_SEASON_MATCHES) {
-      toast.error(`${fromTeam.teamName} has reached match limit.`);
-      setProcessingId(null);
-      return;
-    }
-    if ((targetTeam.matchesThisSeason || 0) >= MAX_SEASON_MATCHES) {
-      toast.error(`${targetTeam.teamName} has reached match limit.`);
-      setProcessingId(null);
-      return;
-    }
+    // Count confirmed challenge matches for this season
+    const limit = settings?.challengeLimitPerUser || 10;
+    
+    const getMatchCount = async (teamId: string) => {
+      const q1 = query(collection(db, 'schedules'), 
+        where('team1Id', '==', teamId), 
+        where('matchType', '==', 'challenge'),
+        where('status', '!=', 'cancelled')
+      );
+      const q2 = query(collection(db, 'schedules'), 
+        where('team2Id', '==', teamId), 
+        where('matchType', '==', 'challenge'),
+        where('status', '!=', 'cancelled')
+      );
+      const [s1, s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+      return s1.size + s2.size;
+    };
 
     try {
+      const [fromMatches, targetMatches] = await Promise.all([
+        getMatchCount(fromTeam.id),
+        getMatchCount(targetTeam.id)
+      ]);
+
+      if (fromMatches >= limit) {
+        toast.error(`${fromTeam.teamName} has reached match limit (${limit}).`);
+        setProcessingId(null);
+        return;
+      }
+
+      if (targetMatches >= limit) {
+        toast.error(`${targetTeam.teamName} has reached match limit (${limit}).`);
+        setProcessingId(null);
+        return;
+      }
+
+      // Check for existing schedule between these two in this season
+      const qPair1 = query(collection(db, 'schedules'),
+        where('team1Id', '==', fromTeam.id),
+        where('team2Id', '==', targetTeam.id),
+        where('matchType', '==', 'challenge'),
+        where('status', '!=', 'cancelled')
+      );
+      const qPair2 = query(collection(db, 'schedules'),
+        where('team1Id', '==', targetTeam.id),
+        where('team2Id', '==', fromTeam.id),
+        where('matchType', '==', 'challenge'),
+        where('status', '!=', 'cancelled')
+      );
+      const [pairSnap1, pairSnap2] = await Promise.all([getDocs(qPair1), getDocs(qPair2)]);
+
+      if (!pairSnap1.empty || !pairSnap2.empty) {
+        toast.error("These teams have already played or have a scheduled match against each other this season.");
+        setProcessingId(null);
+        return;
+      }
+
       const batch = writeBatch(db);
 
       // 1. Create Schedule
@@ -72,6 +191,7 @@ export default function ChallengesAdmin() {
         matchType: 'challenge',
         status: 'upcoming',
         firstPick: details.sideSelection || '1st',
+        bet: details.bet || 0,
         createdAt: serverTimestamp()
       });
 
@@ -91,7 +211,7 @@ export default function ChallengesAdmin() {
         const newDetails = { ...challenge.challengeDetails };
         delete newDetails[targetTeamId];
         
-        // Sanitize to remove any potential undefined sideSelection or other optional fields
+        // Sanitize
         Object.keys(newDetails).forEach(key => {
           const d = newDetails[key] as any;
           if (d && d.sideSelection === undefined) {
@@ -145,7 +265,6 @@ export default function ChallengesAdmin() {
           const newDetails = { ...challenge.challengeDetails };
           delete newDetails[targetTeamId];
           
-          // Sanitize to remove any potential undefined sideSelection or other optional fields
           Object.keys(newDetails).forEach(key => {
             const d = newDetails[key] as any;
             if (d && d.sideSelection === undefined) {
@@ -163,7 +282,6 @@ export default function ChallengesAdmin() {
       }
       toast.success("Challenge deleted.");
 
-      // Notify challenger
       const fromTeam = teams.find(t => t.id === challenge.fromTeamId);
       if (fromTeam?.ownerId) {
         const targetTeam = targetTeamId ? teams.find(t => t.id === targetTeamId) : null;
@@ -188,49 +306,231 @@ export default function ChallengesAdmin() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-black uppercase text-neon-blue">Pending Challenges</h2>
-        <div className="text-[10px] font-black uppercase text-gray-500 bg-white/5 px-4 py-2 rounded-lg border border-white/10">
-          {challenges.reduce((acc, c) => acc + (c.targetTeamIds || []).length, 0)} TOTAL REQUESTS
-        </div>
-      </div>
+    <div className="space-y-12">
+      {/* Result Reporting Modal */}
+      <AnimatePresence>
+        {reportingMatch && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card p-6 max-w-md w-full relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-neon-blue via-neon-cyan to-neon-blue"></div>
+              
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-black uppercase text-neon-blue">Report Challenge Result</h3>
+                <button onClick={() => setReportingMatch(null)} className="text-gray-500 hover:text-white"><X size={20}/></button>
+              </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        {challenges.map(c => {
-          const fromTeam = teams.find(t => t.id === c.fromTeamId);
-          return (c.targetTeamIds || []).map(targetId => {
-            const targetTeam = teams.find(t => t.id === targetId);
-            const details = c.challengeDetails?.[targetId];
-            const isProcessing = processingId === `${c.id}-${targetId}`;
+              <form onSubmit={handleReportSubmit} className="space-y-4">
+                <div className="bg-black/40 p-4 rounded-xl border border-white/10 text-center mb-4">
+                   <div className="flex items-center justify-center gap-4 text-sm font-black">
+                      <span className="text-neon-blue">{reportingMatch.team1Name}</span>
+                      <span className="text-[10px] text-gray-500 italic">VS</span>
+                      <span className="text-neon-blue">{reportingMatch.team2Name}</span>
+                   </div>
+                   <p className="text-[10px] text-gray-500 mt-2">{reportingMatch.date} @ {reportingMatch.time}</p>
+                </div>
 
-            return (
-              <div key={`${c.id}-${targetId}`} className="glass-card p-6 flex flex-col md:flex-row items-center justify-between gap-6 hover:border-white/20 transition-all border border-white/10">
-                <div className="flex items-center gap-6 flex-1">
-                  <div className="text-center">
-                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-2">Challenger</p>
-                    <div className="flex items-center gap-3 bg-neon-blue/5 border border-neon-blue/20 rounded-xl p-3 min-w-[160px]">
-                      <div className="w-8 h-8 rounded-lg bg-black/40 flex items-center justify-center border border-white/10 overflow-hidden">
-                        {fromTeam?.logoUrl ? <img src={fromTeam.logoUrl} className="w-full h-full object-cover" /> : <Shield size={16} />}
-                      </div>
-                      <span className="font-black text-xs uppercase truncate">{fromTeam?.teamName || 'Unknown'}</span>
-                    </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] text-gray-500 font-bold uppercase block">Result Type</label>
+                  <select 
+                    className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm"
+                    value={reportData.type}
+                    onChange={e => setReportData({...reportData, type: e.target.value as MatchResultType, winnerId: e.target.value === 'rematch' ? '' : reportData.winnerId})}
+                  >
+                    <option value="win">Win / Loss</option>
+                    <option value="walkout">Walkout (Penalty)</option>
+                    <option value="rematch">Rematch (No points)</option>
+                  </select>
+                </div>
+
+                {reportData.type !== 'rematch' && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] text-gray-500 font-bold uppercase block">
+                      {reportData.type === 'walkout' ? 'Who Walked Out?' : 'Winner'}
+                    </label>
+                    <select 
+                      className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm"
+                      value={reportData.winnerId}
+                      onChange={e => {
+                        const winId = e.target.value;
+                        if (reportingMatch.bet) {
+                          const bet = Number(reportingMatch.bet);
+                          setReportData({
+                            ...reportData, 
+                            winnerId: winId,
+                            diamondsA: winId === reportingMatch.team1Id ? bet : (winId === reportingMatch.team2Id ? -bet : 0),
+                            diamondsB: winId === reportingMatch.team2Id ? bet : (winId === reportingMatch.team1Id ? -bet : 0)
+                          });
+                        } else {
+                          setReportData({...reportData, winnerId: winId});
+                        }
+                      }}
+                      required
+                    >
+                      <option value="">Select Team</option>
+                      <option value={reportingMatch.team1Id}>{reportingMatch.team1Name}</option>
+                      <option value={reportingMatch.team2Id}>{reportingMatch.team2Name}</option>
+                    </select>
+                  </div>
+                )}
+
+                <div className="space-y-4 pt-4 border-t border-white/10">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] text-gray-500 font-bold uppercase">Reward/Penalty Override</label>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={reportData.useManual}
+                        onChange={e => setReportData({...reportData, useManual: e.target.checked})}
+                      />
+                      <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:width-4 after:transition-all peer-checked:bg-neon-blue"></div>
+                      <span className="ml-2 text-[10px] font-black uppercase text-gray-400">Manual</span>
+                    </label>
                   </div>
 
-                  <Swords size={20} className="text-gray-600 shrink-0 mt-4" />
-
-                  <div className="text-center">
-                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-2">Target</p>
-                    <div className="flex items-center gap-3 bg-neon-red/5 border border-neon-red/20 rounded-xl p-3 min-w-[160px]">
-                      <div className="w-8 h-8 rounded-lg bg-black/40 flex items-center justify-center border border-white/10 overflow-hidden">
-                        {targetTeam?.logoUrl ? <img src={targetTeam.logoUrl} className="w-full h-full object-cover" /> : <Shield size={16} />}
+                  {reportData.useManual && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="grid grid-cols-2 gap-4 bg-black/30 p-4 rounded-xl border border-white/5">
+                      <div className="space-y-2">
+                        <label className="text-[10px] text-neon-blue font-bold uppercase truncate">{reportingMatch.team1Name}</label>
+                        <div className="flex gap-2">
+                          <input type="number" placeholder="Pts" className="w-full bg-black/50 border border-white/10 rounded p-1 text-xs" value={reportData.pointsA} onChange={e => setReportData({...reportData, pointsA: parseInt(e.target.value) || 0})} />
+                          <input type="number" placeholder="Dia" className="w-full bg-black/50 border border-white/10 rounded p-1 text-xs" value={reportData.diamondsA} onChange={e => setReportData({...reportData, diamondsA: parseInt(e.target.value) || 0})} />
+                        </div>
                       </div>
-                      <span className="font-black text-xs uppercase truncate">{targetTeam?.teamName || 'Unknown'}</span>
-                    </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] text-neon-blue font-bold uppercase truncate text-right block">{reportingMatch.team2Name}</label>
+                        <div className="flex gap-2">
+                          <input type="number" placeholder="Pts" className="w-full bg-black/50 border border-white/10 rounded p-1 text-xs text-right" value={reportData.pointsB} onChange={e => setReportData({...reportData, pointsB: parseInt(e.target.value) || 0})} />
+                          <input type="number" placeholder="Dia" className="w-full bg-black/50 border border-white/10 rounded p-1 text-xs text-right" value={reportData.diamondsB} onChange={e => setReportData({...reportData, diamondsB: parseInt(e.target.value) || 0})} />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button type="button" onClick={() => setReportingMatch(null)} className="flex-1 bg-white/5 hover:bg-white/10 p-3 rounded-xl font-bold uppercase text-xs">Cancel</button>
+                  <button 
+                    type="submit" 
+                    disabled={isReporting}
+                    className="flex-1 bg-neon-blue text-black p-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2"
+                  >
+                    {isReporting ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+                    Submit Report
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-black uppercase text-neon-blue flex items-center gap-2">
+            <ShieldCheck size={20} /> Challenge Results Pending
+          </h2>
+          <div className="text-[10px] font-black uppercase text-gray-500 bg-white/5 px-4 py-2 rounded-lg border border-white/10">
+            {scheduledChallenges.length} SCHEDULED
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4">
+           {scheduledChallenges.map(s => (
+             <div key={s.id} className="glass-card p-4 flex flex-col md:flex-row items-center justify-between gap-6 border border-white/10 hover:border-neon-blue/30 transition-all">
+                <div className="flex items-center gap-4 flex-1">
+                  <div className="flex items-center gap-2 bg-black/40 p-2 rounded-lg border border-white/5 flex-1 justify-center">
+                    <span className="font-black text-xs uppercase truncate max-w-[120px]">{s.team1Name}</span>
+                  </div>
+                  <span className="text-[10px] font-black text-gray-600 italic">VS</span>
+                  <div className="flex items-center gap-2 bg-black/40 p-2 rounded-lg border border-white/5 flex-1 justify-center">
+                    <span className="font-black text-xs uppercase truncate max-w-[120px]">{s.team2Name}</span>
                   </div>
                 </div>
 
-                {settings?.bettingEnabled && (
+                <div className="flex items-center gap-8 px-6 border-x border-white/5">
+                  <div className="text-center">
+                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Schedule</p>
+                    <p className="text-[10px] font-bold text-white uppercase">{s.date} @ {s.time}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Bet</p>
+                    <p className="text-[10px] font-black text-neon-cyan uppercase">{s.bet || 0} DIA</p>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => {
+                    setReportingMatch(s);
+                    setReportData({
+                      winnerId: '',
+                      type: 'win',
+                      pointsA: 0,
+                      pointsB: 0,
+                      diamondsA: 0,
+                      diamondsB: 0,
+                      useManual: false
+                    });
+                  }}
+                  className="px-6 py-2 bg-neon-blue text-black font-black uppercase text-[10px] rounded-lg hover:brightness-110 active:scale-95 transition-all shadow-[0_0_15px_rgba(0,229,255,0.2)]"
+                >
+                  Pending (Result)
+                </button>
+             </div>
+           ))}
+
+           {scheduledChallenges.length === 0 && (
+             <div className="text-center py-10 bg-white/5 border border-white/5 rounded-3xl">
+               <p className="text-gray-600 font-bold uppercase tracking-widest text-[10px] italic">No pending challenge results.</p>
+             </div>
+           )}
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-black uppercase text-neon-blue flex items-center gap-2">
+            <Swords size={20} /> Incoming Requests
+          </h2>
+          <div className="text-[10px] font-black uppercase text-gray-500 bg-white/5 px-4 py-2 rounded-lg border border-white/10">
+            {challenges.reduce((acc, c) => acc + (c.targetTeamIds || []).length, 0)} TOTAL REQUESTS
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4">
+          {challenges.map(c => {
+            const fromTeam = teams.find(t => t.id === c.fromTeamId);
+            return (c.targetTeamIds || []).map(targetId => {
+              const targetTeam = teams.find(t => t.id === targetId);
+              const details = c.challengeDetails?.[targetId];
+              const isProcessing = processingId === `${c.id}-${targetId}`;
+
+              return (
+                <div key={`${c.id}-${targetId}`} className="glass-card p-6 flex flex-col md:flex-row items-center justify-between gap-6 hover:border-white/20 transition-all border border-white/10">
+                  <div className="flex items-center gap-6 flex-1">
+                    <div className="text-center">
+                      <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-2">Challenger</p>
+                      <div className="flex items-center gap-3 bg-neon-blue/5 border border-neon-blue/20 rounded-xl p-3 min-w-[160px]">
+                        <div className="w-8 h-8 rounded-lg bg-black/40 flex items-center justify-center border border-white/10 overflow-hidden">
+                          {fromTeam?.logoUrl ? <img src={fromTeam.logoUrl} className="w-full h-full object-cover" alt="" /> : <Shield size={16} />}
+                        </div>
+                        <span className="font-black text-xs uppercase truncate">{fromTeam?.teamName || 'Unknown'}</span>
+                      </div>
+                    </div>
+
+                    <Swords size={20} className="text-gray-600 shrink-0 mt-4" />
+
+                    <div className="text-center">
+                      <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-2">Target</p>
+                      <div className="flex items-center gap-3 bg-neon-red/5 border border-neon-red/20 rounded-xl p-3 min-w-[160px]">
+                        <div className="w-8 h-8 rounded-lg bg-black/40 flex items-center justify-center border border-white/10 overflow-hidden">
+                          {targetTeam?.logoUrl ? <img src={targetTeam.logoUrl} className="w-full h-full object-cover" alt="" /> : <Shield size={16} />}
+                        </div>
+                        <span className="font-black text-xs uppercase truncate">{targetTeam?.teamName || 'Unknown'}</span>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="hidden lg:grid grid-cols-2 gap-4 px-6 border-x border-white/5">
                     <div>
                       <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Proposed Slot</p>
@@ -241,44 +541,38 @@ export default function ChallengesAdmin() {
                       <p className="text-[10px] font-black text-neon-cyan uppercase">{details?.bet || 0} Diamonds</p>
                     </div>
                   </div>
-                )}
-                {!settings?.bettingEnabled && (
-                  <div className="hidden lg:block px-6 border-x border-white/5">
-                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Proposed Slot</p>
-                    <p className="text-[10px] font-bold text-white uppercase">{details?.date} @ {details?.time}</p>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      disabled={isProcessing}
+                      onClick={() => handleForceAccept(c, targetId)}
+                      className="p-3 bg-neon-green/10 text-neon-green border border-neon-green/30 rounded-xl hover:bg-neon-green/20 transition-all"
+                      title="Force Approve"
+                    >
+                      {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteChallenge(c, targetId)}
+                      className="p-3 bg-neon-red/10 text-neon-red border border-neon-red/30 rounded-xl hover:bg-neon-red/20 transition-all"
+                      title="Reject/Delete"
+                    >
+                      <X size={18} />
+                    </button>
                   </div>
-                )}
-
-                <div className="flex items-center gap-2">
-                  <button
-                    disabled={isProcessing}
-                    onClick={() => handleForceAccept(c, targetId)}
-                    className="p-3 bg-neon-green/10 text-neon-green border border-neon-green/30 rounded-xl hover:bg-neon-green/20 transition-all"
-                    title="Force Approve"
-                  >
-                    {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-                  </button>
-                  <button
-                    onClick={() => handleDeleteChallenge(c, targetId)}
-                    className="p-3 bg-neon-red/10 text-neon-red border border-neon-red/30 rounded-xl hover:bg-neon-red/20 transition-all"
-                    title="Reject/Delete"
-                  >
-                    <X size={18} />
-                  </button>
                 </div>
-              </div>
-            );
-          });
-        })}
+              );
+            });
+          })}
 
-        {challenges.length === 0 && (
-          <div className="text-center py-20 bg-white/5 border border-white/5 rounded-3xl space-y-4">
-            <Swords size={48} className="mx-auto text-gray-800" />
-            <p className="text-gray-600 font-bold uppercase tracking-widest text-xs italic">
-              Terminal clear. No active challenge requests detected.
-            </p>
-          </div>
-        )}
+          {challenges.length === 0 && (
+            <div className="text-center py-20 bg-white/5 border border-white/5 rounded-3xl space-y-4">
+              <Swords size={48} className="mx-auto text-gray-800" />
+              <p className="text-gray-600 font-bold uppercase tracking-widest text-xs italic">
+                Terminal clear. No active challenge requests detected.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

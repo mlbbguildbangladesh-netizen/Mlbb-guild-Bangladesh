@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { db, storage, auth, handleFirestoreError, OperationType } from '../lib/firebase';
-import { doc, getDoc, setDoc, updateDoc, writeBatch, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, writeBatch, serverTimestamp, collection, query, where, getDocs, increment } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { updateEmail } from 'firebase/auth';
 import { toast } from 'react-hot-toast';
@@ -24,6 +24,8 @@ const Profile: React.FC = () => {
   const targetId = searchParams.get('id') || (isAdmin ? null : currentUid || user?.id);
 
   const [team, setTeam] = useState<Team | null>(null);
+  const [userTeams, setUserTeams] = useState<Team[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [pendingRegistration, setPendingRegistration] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -72,17 +74,24 @@ const Profile: React.FC = () => {
         if (isAdmin && searchParams.get('id')) {
           // Admin viewing specific team via search param
           teamDoc = await getDoc(doc(db, 'teams', targetId));
+          if (teamDoc.exists()) {
+            setUserTeams([{ id: teamDoc.id, ...teamDoc.data() } as Team]);
+          }
         } else {
           // Regular user or admin's personal view: search by ownerId
           const teamsQuery = query(collection(db, 'teams'), where('ownerId', '==', targetId));
           const querySnap = await getDocs(teamsQuery);
           if (!querySnap.empty) {
-            teamDoc = querySnap.docs[0];
+            const allTeams = querySnap.docs.map(d => ({ id: d.id, ...d.data() } as Team));
+            setUserTeams(allTeams);
+            const activeTeamId = selectedTeamId || allTeams[0].id;
+            teamDoc = querySnap.docs.find(d => d.id === activeTeamId) || querySnap.docs[0];
           } else {
             // Fallback for legacy teams that used userId as Document ID
             const fallbackDoc = await getDoc(doc(db, 'teams', targetId));
             if (fallbackDoc.exists()) {
               teamDoc = fallbackDoc;
+              setUserTeams([{ id: fallbackDoc.id, ...fallbackDoc.data() } as Team]);
             } else {
               // Check if they have a pending registration
               try {
@@ -194,7 +203,7 @@ const Profile: React.FC = () => {
 
     fetchTeam();
     return () => unsubscribeTransactions();
-  }, [targetId, isAdmin, searchParams]);
+  }, [targetId, isAdmin, searchParams, selectedTeamId]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value;
@@ -480,14 +489,24 @@ const Profile: React.FC = () => {
     }
   };
 
+  const getUpgradeCost = (currentRank: string) => {
+    const rankIndex = RANKS.indexOf(currentRank);
+    if (rankIndex === -1) return 500;
+    return 500 * Math.pow(2, rankIndex);
+  };
+
+  const currentUpgradeCost = team ? getUpgradeCost(team.rank || 'E') : 500;
+
   const handleUpgradeRank = async () => {
-    if (!team || !targetId) return;
+    if (!team || !team.id || !targetId) return;
     const currentRank = team.rank || 'E';
     const rankIndex = RANKS.indexOf(currentRank);
     if (rankIndex === -1 || rankIndex >= RANKS.length - 1) return;
     
-    if (team.points < 500) {
-      setError("Insufficient points to upgrade rank (requires 500 points).");
+    const upgradeCost = getUpgradeCost(currentRank);
+    
+    if (team.points < upgradeCost) {
+      setError(`Insufficient points to upgrade rank (requires ${upgradeCost} points).`);
       return;
     }
     
@@ -496,23 +515,37 @@ const Profile: React.FC = () => {
     setSuccess(null);
     
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Not logged in");
-      
-      const res = await fetch('/api/shop/upgrade-rank', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ targetId })
-      });
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to upgrade rank");
+      if (!auth.currentUser) throw new Error("Not logged in");
       
       const nextRank = RANKS[rankIndex + 1];
-      setTeam({ ...team, points: team.points - 500, rank: nextRank });
+      const batch = writeBatch(db);
+
+      const targetTeamRef = doc(db, 'teams', team.id);
+      batch.update(targetTeamRef, {
+        points: increment(-upgradeCost),
+        rank: nextRank
+      });
+      
+      const ownerToUpdate = auth.currentUser.uid;
+      const userRef = doc(db, 'users', ownerToUpdate);
+      batch.update(userRef, {
+        points: increment(-upgradeCost)
+      });
+      
+      const transRef = doc(collection(db, 'transactions'));
+      batch.set(transRef, {
+        teamId: team.id,
+        ownerId: ownerToUpdate,
+        type: 'shop',
+        points: -upgradeCost,
+        diamonds: 0,
+        reason: `Upgraded Rank to ${nextRank}`,
+        timestamp: serverTimestamp()
+      });
+      
+      await batch.commit();
+
+      setTeam({ ...team, points: team.points - upgradeCost, rank: nextRank });
       setSuccess(`Rank upgraded to ${nextRank}!`);
     } catch (err: any) {
       console.error("Rank upgrade error:", err);
@@ -701,6 +734,21 @@ const Profile: React.FC = () => {
           </div>
         )}
       </div>
+
+      {userTeams.length > 1 && (
+        <div className="glass-card p-4 flex flex-col md:flex-row items-center gap-4 border-neon-blue/20">
+          <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest whitespace-nowrap">Selected Team</label>
+          <select 
+            className="w-full md:w-auto bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm font-bold focus:border-neon-blue outline-none transition-colors"
+            value={team?.id || ''}
+            onChange={(e) => setSelectedTeamId(e.target.value)}
+          >
+            {userTeams.map(t => (
+              <option key={t.id} value={t.id}>{t.teamName}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {transactions.length > 0 && (
         <section className="space-y-4">
@@ -1009,7 +1057,7 @@ const Profile: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleUpgradeRank}
-                    disabled={upgradingRank || (team?.points || 0) < 500}
+                    disabled={upgradingRank || (team?.points || 0) < currentUpgradeCost}
                     className="w-full mt-4 bg-[#fde047] text-black hover:bg-yellow-500 px-4 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {upgradingRank ? (
@@ -1017,7 +1065,7 @@ const Profile: React.FC = () => {
                     ) : (
                       <>
                         <Shield size={16} />
-                        UPGRADE RANK (COST: 500 PTS)
+                        UPGRADE RANK (COST: {currentUpgradeCost} PTS)
                       </>
                     )}
                   </button>

@@ -39,6 +39,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { SoloPlayer, Team, RecruitmentRequest } from '../types';
 import toast from 'react-hot-toast';
 import { LoadingIndicator, GridSkeleton } from '../components/LoadingComponents';
+import { openExternalLink } from '../lib/utils';
 
 const ROLES = [
   'Tank',
@@ -778,24 +779,27 @@ export default function SoloPlayers() {
                   <div className="pt-4 border-t border-white/5 space-y-3">
                     {(canRecruit || player.userId === user?.id) ? (
                       <div className="grid grid-cols-2 gap-4">
-                        <a 
-                          href={`https://wa.me/${player.whatsapp.replace(/\D/g, '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button 
+                          onClick={(e) => openExternalLink(e, `https://wa.me/${player.whatsapp.replace(/\D/g, '')}`)}
                           className="flex items-center justify-center gap-2 py-3 bg-neon-green/10 border border-neon-green/20 text-neon-green rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-neon-green/20 transition-all"
                         >
                           <MessageSquare size={14} />
                           WHATSAPP
-                        </a>
-                        <a 
-                          href={player.fbLink.startsWith('http') ? player.fbLink : `https://${player.fbLink}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2 py-3 bg-[#1877F2]/10 border border-[#1877F2]/20 text-[#1877F2] rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-[#1877F2]/20 transition-all"
-                        >
-                          <Facebook size={14} />
-                          FACEBOOK
-                        </a>
+                        </button>
+                        {player.fbLink ? (
+                          <button 
+                            onClick={(e) => openExternalLink(e, player.fbLink)}
+                            className="flex items-center justify-center gap-2 py-3 bg-[#1877F2] text-white border border-[#1877F2]/20 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-[#1877F2]/90 transition-all shadow-[0_0_15px_rgba(24,119,242,0.3)]"
+                          >
+                            <Facebook size={14} />
+                            FACEBOOK
+                          </button>
+                        ) : (
+                          <div className="flex items-center justify-center gap-2 py-3 bg-white/5 border border-white/10 text-gray-500 rounded-lg text-[10px] font-black uppercase tracking-widest opacity-50 cursor-not-allowed">
+                            <Facebook size={14} />
+                            NO LINK
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="p-4 bg-white/5 border border-white/5 rounded-xl border-dashed">

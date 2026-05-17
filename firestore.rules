@@ -51,7 +51,8 @@ service cloud.firestore {
     function isTeamOwner(teamId) {
        return isSignedIn() && (
          teamId == request.auth.uid || 
-         (exists(/databases/$(database)/documents/teams/$(teamId)) && get(/databases/$(database)/documents/teams/$(teamId)).data.ownerId == request.auth.uid)
+         (exists(/databases/$(database)/documents/teams/$(teamId)) && get(/databases/$(database)/documents/teams/$(teamId)).data.ownerId == request.auth.uid) ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('teamId', '') == teamId)
        );
     }
 
@@ -113,11 +114,18 @@ service cloud.firestore {
       allow update: if (
         isSignedIn() && (
           isStaff('users') || isStaff('logo-update') || isStaff('matches') || (
-            isOwner(userId) && 
-            // Only allow if profile edits are enabled in global settings or it hasn't been set yet
-            (exists(/databases/$(database)/documents/settings/global) == false || get(/databases/$(database)/documents/settings/global).data.get('profileEditsEnabled', true) == true) &&
-            // Prevent changing critical fields
-            (!incoming().diff(existing()).affectedKeys().hasAny(['role', 'points', 'diamonds', 'isVerified', 'isAdmin']))
+            isOwner(userId) && (
+              // Allow point deduction for penalties (e.g. declining challenges)
+              (
+                incoming().get('points', 0) < existing().get('points', 0) &&
+                incoming().diff(existing()).affectedKeys().hasOnly(['points'])
+              ) ||
+              // Existing profile edit logic
+              (
+                (exists(/databases/$(database)/documents/settings/global) == false || get(/databases/$(database)/documents/settings/global).data.get('profileEditsEnabled', true) == true) &&
+                !incoming().diff(existing()).affectedKeys().hasAny(['role', 'points', 'diamonds', 'isVerified', 'isAdmin'])
+              )
+            )
           )
         )
       );
@@ -133,10 +141,24 @@ service cloud.firestore {
       allow update: if (
         isSignedIn() && (
           isStaff('teams') || isStaff('logo-update') || isStaff('matches') || (
-            (isOwner(existing().get('ownerId', '')) || isOwner(teamId)) &&
-            // Only allow if profile edits are enabled in global settings
-            (exists(/databases/$(database)/documents/settings/global) == false || get(/databases/$(database)/documents/settings/global).data.get('profileEditsEnabled', true) == true) &&
-            incoming().get('ownerId', existing().get('ownerId', '')) == existing().get('ownerId', '')
+            isTeamOwner(teamId) &&
+            // Allow Rank Upgrade or Point Deduction
+            (
+              (
+                incoming().get('points', 0) < existing().get('points', 0) && 
+                incoming().diff(existing()).affectedKeys().hasOnly(['points'])
+              ) ||
+              (
+                incoming().get('points', 0) < existing().get('points', 0) &&
+                incoming().diff(existing()).affectedKeys().hasOnly(['points', 'rank'])
+              ) ||
+              (
+                // Existing profile edit logic
+                (exists(/databases/$(database)/documents/settings/global) == false || get(/databases/$(database)/documents/settings/global).data.get('profileEditsEnabled', true) == true) &&
+                incoming().get('ownerId', existing().get('ownerId', '')) == existing().get('ownerId', '') &&
+                !incoming().diff(existing()).affectedKeys().hasAny(['role', 'points', 'diamonds', 'isVerified', 'isAdmin'])
+              )
+            )
           ) || (
             // Support for batch increments of matchesThisSeason or player recruitment
             incoming().diff(existing()).affectedKeys().hasOnly(['matchesThisSeason']) ||
@@ -163,16 +185,19 @@ service cloud.firestore {
     match /transactions/{transId} {
       allow read: if isStaff('transactions') || isStaff('matches') || (isSignedIn() && resource != null && (existing().get('teamId', '') == request.auth.uid || existing().get('ownerId', '') == request.auth.uid || request.auth.uid in existing().get('allowedViewerUids', [])));
       allow list: if canListTransactions();
+      allow create: if isSignedIn() && (
+        isStaff('transactions') || isStaff('matches') || 
+        (incoming().get('ownerId', '') == request.auth.uid || isTeamOwner(incoming().get('teamId', '')))
+      );
       allow write: if isStaff('transactions') || isStaff('matches');
     }
 
     match /challenges/{challengeId} {
       allow read, list: if true;
-      allow create: if isSignedIn() && (incoming().get('fromTeamId', '') == request.auth.uid || (exists(/databases/$(database)/documents/teams/$(incoming().get('fromTeamId', ''))) && get(/databases/$(database)/documents/teams/$(incoming().get('fromTeamId', ''))).data.ownerId == request.auth.uid));
-      allow update, delete: if isAdmin() || (isSignedIn() && (
-        challengeId == request.auth.uid || 
-        (exists(/databases/$(database)/documents/teams/$(challengeId)) && get(/databases/$(database)/documents/teams/$(challengeId)).data.ownerId == request.auth.uid) ||
-        request.auth.uid in existing().get('targetTeamIds', [])
+      allow create: if isSignedIn() && isTeamOwner(incoming().get('fromTeamId', ''));
+      allow update, delete: if isStaff('challenges') || (isSignedIn() && (
+        isTeamOwner(challengeId) || 
+        isTeamOwner(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('teamId', '')) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('teamId', '') in existing().get('targetTeamIds', [])
       ));
     }
 

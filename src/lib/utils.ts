@@ -86,7 +86,9 @@ export const recordMatchResult = async (
   winnerId: string | 'draw', 
   resultType: MatchResultType,
   manualPoints?: { teamA: number, teamB: number },
-  manualDiamonds?: { teamA: number, teamB: number }
+  manualDiamonds?: { teamA: number, teamB: number },
+  isChallenge: boolean = false,
+  betAmount: number = 0
 ) => {
   const teamARef = doc(db, 'teams', teamAId);
   const teamBRef = doc(db, 'teams', teamBId);
@@ -120,33 +122,35 @@ export const recordMatchResult = async (
   if (!manualPoints && !manualDiamonds) {
     if (resultType === 'win') {
       if (winnerId === teamAId) {
-        pointsA = 50; diamondsA = 20;
-        pointsB = -20; diamondsB = -30;
-        if (newStreakA > 0) {
-          pointsA += 20; diamondsA += 20;
-        }
-        const rankBonus = getRankBonus(teamAData.rank);
-        pointsA += rankBonus; diamondsA += rankBonus;
+        const bonus = getRankBonus(teamAData.rank);
+        pointsA = 50 + bonus; 
+        diamondsA = 20 + bonus;
+        
+        pointsB = -20; 
+        diamondsB = -30;
+
         newStreakA += 1;
         newStreakB = 0;
       } else if (winnerId === teamBId) {
-        pointsB = 50; diamondsB = 20;
-        pointsA = -20; diamondsA = -30;
-        if (newStreakB > 0) {
-          pointsB += 20; diamondsB += 20;
-        }
-        const rankBonus = getRankBonus(teamBData.rank);
-        pointsB += rankBonus; diamondsB += rankBonus;
+        const bonus = getRankBonus(teamBData.rank);
+        pointsB = 50 + bonus; 
+        diamondsB = 20 + bonus;
+
+        pointsA = -20; 
+        diamondsA = -30;
+
         newStreakB += 1;
         newStreakA = 0;
       }
     } else if (resultType === 'walkout') {
       if (winnerId === teamAId) { // Team A performed walkout
-        pointsA = -20; diamondsA = -30;
+        pointsA = -20; 
+        diamondsA = -30;
         pointsB = 0; diamondsB = 0;
         newStreakA = 0;
       } else if (winnerId === teamBId) { // Team B performed walkout
-        pointsB = -20; diamondsB = -30;
+        pointsB = -20; 
+        diamondsB = -30;
         pointsA = 0; diamondsA = 0;
         newStreakB = 0;
       }
@@ -156,7 +160,7 @@ export const recordMatchResult = async (
     }
   } else {
     // If manual values provided, update streaks accordingly if it's a win/loss
-    if (resultType === 'win' || resultType === 'loss') {
+    if (resultType === 'win') {
       if (winnerId === teamAId) {
         newStreakA += 1;
         newStreakB = 0;

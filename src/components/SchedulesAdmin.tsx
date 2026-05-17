@@ -250,7 +250,9 @@ export default function SchedulesAdmin() {
         reportData.winnerId as any, 
         reportData.type,
         manualPoints,
-        manualDiamonds
+        manualDiamonds,
+        reportingMatch.matchType === 'challenge',
+        Number(reportingMatch.bet || 0)
       );
 
       // 2. Mark the schedule as completed and store details
@@ -817,6 +819,7 @@ export default function SchedulesAdmin() {
                           <button 
                             onClick={() => {
                               setReportingMatch(s);
+                              
                               setReportData({ 
                                 winnerId: s.matchDetails?.winnerId || '', 
                                 type: s.matchDetails?.resultType || 'win', 
@@ -825,7 +828,7 @@ export default function SchedulesAdmin() {
                                 pointsB: s.matchDetails?.pointsExchanged?.team2 || 0, 
                                 diamondsA: s.matchDetails?.diamondsExchanged?.team1 || 0, 
                                 diamondsB: s.matchDetails?.diamondsExchanged?.team2 || 0, 
-                                useManual: !!s.matchDetails 
+                                useManual: !!s.matchDetails
                               });
                             }}
                             className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${

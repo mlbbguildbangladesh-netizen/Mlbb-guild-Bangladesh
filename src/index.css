@@ -1,9 +1,15 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+Bengali:wght@400;600;800&family=Hind+Siliguri:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+Bengali:wght@400;600;800&family=Hind+Siliguri:wght@400;600;700&family=Noto+Sans+Arabic:wght@400;700&family=Noto+Sans+JP:wght@400;700&family=Noto+Sans+KR:wght@400;700&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;600;700&family=Audiowide&family=Inter:wght@400;600;900&family=Poppins:wght@400;600;800&family=Space+Grotesk:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Quicksand:wght@400;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Outfit", "Hind Siliguri", "Noto Sans Bengali", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-sans: "Outfit", "Hind Siliguri", "Noto Sans Bengali", "Inter", "Poppins", "Noto Sans Arabic", "Noto Sans JP", "Noto Sans KR", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-orbitron: "Orbitron", sans-serif;
+  --font-rajdhani: "Rajdhani", sans-serif;
+  --font-audiowide: "Audiowide", cursive;
+  --font-space: "Space Grotesk", sans-serif;
+  --font-serif: "Playfair Display", serif;
+  --font-rounded: "Quicksand", sans-serif;
   
   --color-neon-blue: #00E5FF;
   --color-neon-red: #FF2E63;

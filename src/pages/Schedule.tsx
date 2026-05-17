@@ -38,7 +38,7 @@ const Schedule: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'upcoming' | 'live' | 'results'>('all');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'official' | 'challenge'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'official' | 'challenge' | 'seasonal'>('all');
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [newMatch, setNewMatch] = useState<Partial<ScheduleMatch>>({
@@ -154,8 +154,65 @@ const Schedule: React.FC = () => {
     return highlights.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [challenges, teams, matches]);
 
+  const allMatchesList = useMemo(() => {
+    const combined: ScheduleMatch[] = [...matches];
+    const processed = new Set<string>();
+
+    challenges.forEach(c1 => {
+      const team1 = teams.find(t => t.id === c1.fromTeamId);
+      if (!team1) return;
+
+      (c1.targetTeamIds || []).forEach(targetId => {
+        const team2 = teams.find(t => t.id === targetId);
+        if (!team2) return;
+
+        const c2 = challenges.find(c => c.fromTeamId === targetId);
+
+        if (c2 && (c2.targetTeamIds || []).includes(c1.fromTeamId)) {
+          const matchKey = [c1.fromTeamId, targetId].sort().join('-');
+          if (!processed.has(matchKey)) {
+            const details1 = c1.challengeDetails?.[targetId];
+            const details2 = c2.challengeDetails?.[c1.fromTeamId];
+            
+            const time = details2?.preferredTime || details1?.preferredTime || details1?.time || details2?.time || 'TBD';
+            const date = details2?.preferredDate || details1?.preferredDate || details1?.date || details2?.date || 'TBD';
+            
+            let firstPickName = '';
+            let firstPickTeamId = '';
+            if (details1?.sideSelection === '1st') firstPickTeamId = c1.fromTeamId;
+            else if (details1?.sideSelection === '2nd') firstPickTeamId = targetId;
+            else if (details2?.sideSelection === '1st') firstPickTeamId = targetId;
+            else if (details2?.sideSelection === '2nd') firstPickTeamId = c1.fromTeamId;
+
+            if (firstPickTeamId === c1.fromTeamId) firstPickName = team1.teamName;
+            else if (firstPickTeamId === targetId) firstPickName = team2.teamName;
+
+            combined.push({
+              id: `challenge-${matchKey}`,
+              team1Id: team1.id,
+              team1Name: team1.teamName,
+              team2Id: team2.id,
+              team2Name: team2.teamName,
+              date,
+              time,
+              status: 'upcoming',
+              firstPick: firstPickName,
+              matchType: 'challenge'
+            });
+            processed.add(matchKey);
+          }
+        }
+      });
+    });
+    return combined.sort((a, b) => {
+      const dateA = a.date !== 'TBD' ? new Date(`${a.date}T${a.time !== 'TBD' ? a.time : '00:00'}`).getTime() : Infinity;
+      const dateB = b.date !== 'TBD' ? new Date(`${b.date}T${b.time !== 'TBD' ? b.time : '00:00'}`).getTime() : Infinity;
+      return dateA - dateB;
+    });
+  }, [matches, challenges, teams]);
+
   const filteredMatches = useMemo(() => {
-    return matches.filter(match => {
+    return allMatchesList.filter(match => {
       const matchesSearch = 
         match.team1Name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         match.team2Name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -173,7 +230,7 @@ const Schedule: React.FC = () => {
       if (activeTab === 'results') return match.status === 'completed';
       return true;
     });
-  }, [matches, searchTerm, activeTab]);
+  }, [allMatchesList, searchTerm, activeTab, typeFilter]);
 
   const handleAddMatch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,7 +247,7 @@ const Schedule: React.FC = () => {
         team2Name: team2?.teamName || '',
         date: newMatch.date,
         time: newMatch.time,
-        matchType: 'official' as const,
+        matchType: newMatch.matchType || 'official',
         status: newMatch.status || 'upcoming',
         firstPick: newMatch.firstPick || '',
         createdAt: serverTimestamp()
@@ -395,8 +452,8 @@ const Schedule: React.FC = () => {
       </div>
 
       {/* Type Filter */}
-      <div className="flex gap-4 px-1">
-        {(['all', 'official', 'challenge'] as const).map((type) => (
+      <div className="flex flex-wrap gap-2 md:gap-4 px-1">
+        {(['all', 'official', 'challenge', 'seasonal'] as const).map((type) => (
           <button
             key={type}
             onClick={() => setTypeFilter(type)}
@@ -407,7 +464,8 @@ const Schedule: React.FC = () => {
             }`}
           >
             {type === 'all' && 'All Types'}
-            {type === 'official' && 'Official Season'}
+            {type === 'official' && 'Official Matches'}
+            {type === 'seasonal' && 'Seasonal'}
             {type === 'challenge' && 'Team Challenges'}
           </button>
         ))}
@@ -605,6 +663,18 @@ const Schedule: React.FC = () => {
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-neon-blue outline-none [color-scheme:dark]"
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Match Type</label>
+                  <select
+                    value={newMatch.matchType || 'official'}
+                    onChange={(e) => setNewMatch({...newMatch, matchType: e.target.value as 'official' | 'challenge' | 'seasonal'})}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-neon-blue outline-none"
+                  >
+                    <option value="official">Official Matches</option>
+                    <option value="seasonal">Seasonal</option>
+                  </select>
                 </div>
 
                 <div className="pt-4 flex gap-4">

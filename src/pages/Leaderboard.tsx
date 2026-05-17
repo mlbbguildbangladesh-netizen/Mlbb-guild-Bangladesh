@@ -55,7 +55,15 @@ const Leaderboard: React.FC = () => {
     .filter(t => t.teamName.toLowerCase().includes(search.toLowerCase()) && t.registrationStatus === 'approved')
     .sort((a, b) => {
       let comparison = 0;
-      if (sortBy === 'points') comparison = (a.points || 0) - (b.points || 0);
+      if (sortBy === 'points') {
+        const rankA = RANKS.indexOf(a.rank || 'E');
+        const rankB = RANKS.indexOf(b.rank || 'E');
+        if (rankA !== rankB) {
+          comparison = rankA - rankB;
+        } else {
+          comparison = (a.points || 0) - (b.points || 0);
+        }
+      }
       else if (sortBy === 'diamonds') comparison = (a.diamonds || 0) - (b.diamonds || 0);
       else if (sortBy === 'streak') comparison = (a.streak || 0) - (b.streak || 0);
       else if (sortBy === 'createdAt') comparison = new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
