@@ -2,7 +2,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, onSnapshot, updateDoc, setDoc } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { User, Role, AppSetting } from '../types';
+import { requestNotificationPermission, onMessageListener } from '../lib/fcmService';
+import toast from 'react-hot-toast';
 
 interface AuthContextType {
   user: User | null;
@@ -80,6 +81,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (fUser) {
+        // Request FCM permission
+        requestNotificationPermission(fUser.uid);
+        
+        // Listen for foreground messages
+        onMessageListener().then((payload: any) => {
+          console.log("Push Notification Received:", payload);
+          toast((t) => (
+            <div className="flex flex-col gap-1">
+              <span className="font-bold text-sm">{payload.notification?.title}</span>
+              <span className="text-xs text-gray-500">{payload.notification?.body}</span>
+              {payload.data?.click_action && (
+                <button 
+                  onClick={() => {
+                   window.location.href = payload.data.click_action;
+                   toast.dismiss(t.id);
+                  }}
+                  className="bg-neon-blue text-black text-[10px] font-black uppercase px-2 py-1 rounded mt-1"
+                >
+                  View
+                </button>
+              )}
+            </div>
+          ), { duration: 6000 });
+        });
+
         // User is logged in, attach a real-time listener to their data
         const userRef = doc(db, 'users', fUser.uid);
         unsubUserDocument = onSnapshot(userRef, (docSnap) => {

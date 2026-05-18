@@ -89,16 +89,19 @@ const Challenges: React.FC = () => {
   const currentTeam = useMemo(() => {
     if (!user) return null;
     if (user.role === 'admin') return null;
+
+    // First try finding by the teamId associated with the user profile (used as active team)
+    if (user.teamId) {
+      const activeTeam = teams.find(t => t.id === user.teamId);
+      if (activeTeam && (activeTeam.ownerId === user.id || activeTeam.players.includes(user.id))) {
+         return activeTeam;
+      }
+    }
     
-    // First try finding by where user is owner (for leaders)
+    // Fallback: finding by where user is owner (for leaders)
     const ownedTeam = teams.find(t => t.ownerId === user.id);
     if (ownedTeam) return ownedTeam;
 
-    // Then try finding by the teamId associated with the user profile (for regular players)
-    if (user.teamId) {
-      return teams.find(t => t.id === user.teamId) || null;
-    }
-    
     return null;
   }, [user, teams]);
 
@@ -110,6 +113,12 @@ const Challenges: React.FC = () => {
     if (!currentTeam) return null;
     return activeChallenges.find(c => c.fromTeamId === currentTeam.id);
   }, [currentTeam, activeChallenges]);
+
+  const minDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  }, []);
 
   useEffect(() => {
     if (!selectedDate || !timePickerTeam || !currentTeam) return;
@@ -254,6 +263,12 @@ const Challenges: React.FC = () => {
     const limit = settings?.challengeLimitPerUser || 10;
     if ((currentTeam.matchesThisSeason || 0) >= limit) {
       toast.error("Limit Reached");
+      return;
+    }
+
+    // Rule: Date Validation
+    if (!selectedDate || selectedDate < minDate) {
+      toast.error(`Challenges must be scheduled for tomorrow (${minDate}) or later.`);
       return;
     }
 
@@ -417,6 +432,10 @@ const Challenges: React.FC = () => {
 
   const handleReject = async (challenge: Challenge) => {
     if (!currentTeam) return;
+    
+    const confirmReject = window.confirm("IF YOU REJECT, YOUR 10 POINT WILL BE MINUS. ARE YOU SURE?");
+    if (!confirmReject) return;
+
     try {
       // 10 point penalty for declining as per user request
       const penaltyAmount = 10;
@@ -948,10 +967,10 @@ const Challenges: React.FC = () => {
                                   toast.error("Failed to accept challenge.");
                                 }
                               }}
-                              className={`w-full py-3 ${isLeader ? 'bg-neon-green text-black' : 'bg-white/5 text-gray-500'} font-black text-[10px] uppercase tracking-widest rounded-lg shadow-[0_0_15px_rgba(52,211,153,0.2)] hover:brightness-110 transition-all flex items-center justify-center gap-2`}
+                              className={`w-full py-3 ${isLeader ? 'bg-neon-green text-black' : 'bg-white/5 text-gray-500'} font-black text-[10px] uppercase tracking-widest rounded-lg hover:brightness-110 shadow-[0_0_20px_rgba(0,255,102,0.3)] transition-all flex items-center justify-center gap-2`}
                             >
                               <CheckCircle2 size={14} />
-                              {isLeader ? 'ACCEPT' : 'LEADER ONLY'}
+                              {isLeader ? 'ACCEPT CHALLENGE' : 'LEADER ONLY'}
                             </button>
                             <button 
                               disabled={!isLeader}
@@ -1268,6 +1287,7 @@ const Challenges: React.FC = () => {
                     type="date"
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
+                    min={minDate}
                     className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 focus:outline-none focus:border-neon-blue transition-all uppercase"
                   />
                 </div>

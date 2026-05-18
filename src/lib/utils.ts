@@ -88,7 +88,8 @@ export const recordMatchResult = async (
   manualPoints?: { teamA: number, teamB: number },
   manualDiamonds?: { teamA: number, teamB: number },
   isChallenge: boolean = false,
-  betAmount: number = 0
+  betAmount: number = 0,
+  scheduleId?: string
 ) => {
   const teamARef = doc(db, 'teams', teamAId);
   const teamBRef = doc(db, 'teams', teamBId);
@@ -107,6 +108,13 @@ export const recordMatchResult = async (
   const teamBData = teamBSnap.data() as Team;
 
   const batch = writeBatch(db);
+
+  // Update schedule status if provided
+  if (scheduleId) {
+    const scheduleRef = doc(db, 'schedules', scheduleId);
+    batch.update(scheduleRef, { status: 'completed' });
+  }
+
   const matchRef = doc(collection(db, 'matches'));
   const timestamp = serverTimestamp();
 
@@ -154,7 +162,7 @@ export const recordMatchResult = async (
         pointsA = 0; diamondsA = 0;
         newStreakB = 0;
       }
-    } else if (resultType === 'rematch') {
+    } else if (resultType === 'rematch' || resultType === 'cancelled') {
       pointsA = 0; pointsB = 0;
       diamondsA = 0; diamondsB = 0;
     }

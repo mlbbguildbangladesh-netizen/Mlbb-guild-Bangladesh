@@ -233,7 +233,7 @@ export default function SchedulesAdmin() {
   const handleReportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reportingMatch) return;
-    if (!reportData.winnerId && reportData.type !== 'rematch') {
+    if (!reportData.winnerId && reportData.type !== 'rematch' && reportData.type !== 'cancelled') {
       toast.error("Please select a winner or result type");
       return;
     }
@@ -257,7 +257,7 @@ export default function SchedulesAdmin() {
 
       // 2. Mark the schedule as completed and store details
       await updateDoc(doc(db, 'schedules', reportingMatch.id), {
-        status: 'completed',
+        status: reportData.type === 'cancelled' ? 'cancelled' : 'completed',
         matchDetails: {
           winnerId: reportData.winnerId,
           resultType: reportData.type,
@@ -379,6 +379,7 @@ export default function SchedulesAdmin() {
                     <option value="win">Win / Loss</option>
                     <option value="walkout">Walkout (Penalty)</option>
                     <option value="rematch">Rematch (No points)</option>
+                    <option value="cancelled">Cancelled (Hidden from public)</option>
                   </select>
                 </div>
 
@@ -642,226 +643,267 @@ export default function SchedulesAdmin() {
         </form>
       </div>
 
-      <div className="space-y-4">
-        <h3 className="text-xs font-black uppercase text-gray-500 flex items-center gap-2">
-          <Calendar size={14} /> Upcoming / Created Schedules
-        </h3>
-        
-        {schedules.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 font-medium text-xs uppercase tracking-widest border border-white/5 rounded-2xl bg-white/5">
-            No schedules created yet
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[...schedules].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(s => (
-              <div key={s.id} className="bg-white/5 border border-white/10 p-4 rounded-xl relative group transition-all hover:border-white/20">
-                {editingId === s.id ? (
-                  <div className="space-y-3">
-                    <div className="flex gap-2">
-                      <input type="date" className="w-full bg-black/50 border border-white/10 rounded p-1 text-xs" value={editMatch.date} onChange={e => setEditMatch({...editMatch, date: e.target.value})} />
-                      <input type="time" className="w-full bg-black/50 border border-white/10 rounded p-1 text-xs" value={editMatch.time} onChange={e => setEditMatch({...editMatch, time: e.target.value})} />
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <select className="w-full bg-black/50 border border-white/10 rounded p-1 text-xs" value={editMatch.team1Id || ''} onChange={e => {
-                        const tm = teams.find(t => t.id === e.target.value);
-                        setEditMatch({...editMatch, team1Id: tm?.id, team1Name: tm?.teamName, firstPick: ''});
-                      }}>
-                        <option value="">Team 1</option>
-                        {teams.map(t => <option key={t.id} value={t.id}>{t.teamName}</option>)}
-                        {!teams.find(t => t.id === editMatch.team1Id) && editMatch.team1Name && <option value={editMatch.team1Id}>{editMatch.team1Name}</option>}
-                      </select>
-                      <span className="text-[10px]">VS</span>
-                       <select className="w-full bg-black/50 border border-white/10 rounded p-1 text-xs" value={editMatch.team2Id || ''} onChange={e => {
-                        const tm = teams.find(t => t.id === e.target.value);
-                        setEditMatch({...editMatch, team2Id: tm?.id, team2Name: tm?.teamName, firstPick: ''});
-                      }}>
-                        <option value="">Team 2</option>
-                        {teams.map(t => <option key={t.id} value={t.id}>{t.teamName}</option>)}
-                        {!teams.find(t => t.id === editMatch.team2Id) && editMatch.team2Name && <option value={editMatch.team2Id}>{editMatch.team2Name}</option>}
-                      </select>
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <select className="w-full bg-black/50 border border-white/10 rounded p-1 text-xs" value={editMatch.firstPick} onChange={e => setEditMatch({...editMatch, firstPick: e.target.value})}>
-                        <option value="">1st Pick</option>
-                        {editMatch.team1Name && <option value={editMatch.team1Name}>{editMatch.team1Name}</option>}
-                        {editMatch.team2Name && <option value={editMatch.team2Name}>{editMatch.team2Name}</option>}
-                      </select>
-                      <select className="w-full bg-black/50 border border-white/10 rounded p-1 text-xs" value={editMatch.status} onChange={e => setEditMatch({...editMatch, status: e.target.value as any})}>
-                        <option value="upcoming">Upcoming</option>
-                        <option value="live">Live</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
-                    </div>
-                    <div className="flex justify-end gap-2 mt-2">
-                       <button onClick={() => setEditingId(null)} className="text-gray-500 hover:text-white p-1"><X size={16}/></button>
-                       <button onClick={handleUpdate} className="text-neon-green hover:text-white p-1"><Check size={16}/></button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
-                      <div className="flex items-center gap-3">
-                        <span className={`text-[10px] font-black uppercase px-2 py-1 border rounded ${
-                          s.status === 'upcoming' ? 'bg-neon-blue/10 text-neon-blue border-neon-blue/20' :
-                          s.status === 'live' ? 'bg-neon-red text-white border-neon-red animate-pulse' :
-                          s.status === 'completed' ? 'bg-neon-green/10 text-neon-green border-neon-green/20' :
-                          'bg-neon-red/10 text-neon-red border-neon-red/20'
-                        }`}>
-                          {s.status}
-                        </span>
-                        <div className="flex items-center gap-2 text-xs font-medium text-gray-400">
-                          <Calendar size={12} /> {s.date} <Clock size={12} /> {s.time}
-                        </div>
-                      </div>
+      <div className="space-y-8">
+        {/* Pending Results Section */}
+        {(() => {
+          const pending = schedules.filter(s => {
+            if (s.status === 'completed' || s.status === 'cancelled') return false;
+            const matchDateTime = new Date(`${s.date}T${s.time}`).getTime();
+            return Date.now() >= matchDateTime;
+          });
 
-                      <div className="flex items-center gap-2 pointer-events-auto">
-                        <button 
-                          type="button"
-                          onClick={() => { setEditingId(s.id); setEditMatch(s); }} 
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-blue/10 text-neon-blue rounded-lg text-[10px] font-black uppercase border border-neon-blue/20 hover:bg-neon-blue hover:text-black transition-all active:scale-95 shadow-[0_0_10px_rgba(0,229,255,0.1)]"
-                        >
-                          <Pencil size={12}/>
-                          Edit
-                        </button>
-                        <button 
-                          type="button"
-                          onClick={() => setDeleteConfirmId(s.id)} 
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-red/10 text-neon-red rounded-lg text-[10px] font-black uppercase border border-neon-red/20 hover:bg-neon-red hover:text-white transition-all active:scale-95 shadow-[0_0_10px_rgba(255,46,99,0.1)]"
-                        >
-                          <Trash size={12}/>
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-between items-center bg-black/50 p-3 rounded-lg border border-white/5">
-                      <div className="flex space-x-2 items-center w-[40%] overflow-hidden">
-                        <div className="w-6 h-6 rounded bg-black border border-white/10 shrink-0 flex items-center justify-center overflow-hidden">
-                          {teams.find(t => t.id === s.team1Id)?.logoUrl ? 
-                            <ImageWithFallback src={teams.find(t => t.id === s.team1Id)!.logoUrl!} className="w-full h-full object-cover" /> : 
-                            <Users size={12} className={`shrink-0 ${s.matchDetails?.winnerId === s.team1Id ? 'text-neon-blue' : 'text-gray-500'}`} />
-                          }
-                        </div>
-                        <span className={`text-sm font-black uppercase truncate ${s.matchDetails?.winnerId === s.team1Id ? 'text-neon-blue' : ''}`}>{s.team1Name}</span>
-                      </div>
-                      <span className="text-[10px] font-black italic text-neon-blue px-2">VS</span>
-                      <div className="flex space-x-2 justify-end items-center w-[40%] overflow-hidden text-right">
-                        <span className={`text-sm font-black uppercase truncate ${s.matchDetails?.winnerId === s.team2Id ? 'text-neon-blue' : ''}`}>{s.team2Name}</span>
-                        <div className="w-6 h-6 rounded bg-black border border-white/10 shrink-0 flex items-center justify-center overflow-hidden">
-                          {teams.find(t => t.id === s.team2Id)?.logoUrl ? 
-                            <ImageWithFallback src={teams.find(t => t.id === s.team2Id)!.logoUrl!} className="w-full h-full object-cover" /> : 
-                            <Users size={12} className={`shrink-0 ${s.matchDetails?.winnerId === s.team2Id ? 'text-neon-blue' : 'text-gray-500'}`} />
-                          }
-                        </div>
-                      </div>
-                    </div>
+          if (pending.length === 0) return null;
 
-                    {s.status === 'completed' && s.matchDetails && (
-                      <div className="mt-3 bg-neon-blue/5 border border-neon-blue/10 rounded-lg p-2 grid grid-cols-2 gap-2 text-[9px] font-black uppercase tracking-widest">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1">
-                            <div className="w-4 h-4 rounded-sm bg-black border border-white/10 flex items-center justify-center overflow-hidden">
-                              {teams.find(t => t.id === s.team1Id)?.logoUrl && <ImageWithFallback src={teams.find(t => t.id === s.team1Id)!.logoUrl!} className="w-full h-full object-cover" />}
-                            </div>
-                            <p className="text-gray-500 truncate">{s.team1Name}</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <span className={s.matchDetails.pointsExchanged?.team1 && s.matchDetails.pointsExchanged.team1 >= 0 ? 'text-neon-green' : 'text-neon-red'}>
-                              {s.matchDetails.pointsExchanged?.team1 && s.matchDetails.pointsExchanged.team1 >= 0 ? '+' : ''}{s.matchDetails.pointsExchanged?.team1} PTS
-                            </span>
-                            <span className={s.matchDetails.diamondsExchanged?.team1 && s.matchDetails.diamondsExchanged.team1 >= 0 ? 'text-neon-cyan' : 'text-neon-red'}>
-                              {s.matchDetails.diamondsExchanged?.team1 && s.matchDetails.diamondsExchanged.team1 >= 0 ? '+' : ''}{s.matchDetails.diamondsExchanged?.team1} DIA
-                            </span>
-                          </div>
-                        </div>
-                        <div className="space-y-1 text-right">
-                          <div className="flex items-center gap-1 justify-end">
-                            <p className="text-gray-500 truncate">{s.team2Name}</p>
-                            <div className="w-4 h-4 rounded-sm bg-black border border-white/10 flex items-center justify-center overflow-hidden">
-                              {teams.find(t => t.id === s.team2Id)?.logoUrl && <ImageWithFallback src={teams.find(t => t.id === s.team2Id)!.logoUrl!} className="w-full h-full object-cover" />}
-                            </div>
-                          </div>
-                          <div className="flex gap-2 justify-end">
-                            <span className={s.matchDetails.pointsExchanged?.team2 && s.matchDetails.pointsExchanged.team2 >= 0 ? 'text-neon-green' : 'text-neon-red'}>
-                              {s.matchDetails.pointsExchanged?.team2 && s.matchDetails.pointsExchanged.team2 >= 0 ? '+' : ''}{s.matchDetails.pointsExchanged?.team2} PTS
-                            </span>
-                            <span className={s.matchDetails.diamondsExchanged?.team2 && s.matchDetails.diamondsExchanged.team2 >= 0 ? 'text-neon-cyan' : 'text-neon-red'}>
-                              {s.matchDetails.diamondsExchanged?.team2 && s.matchDetails.diamondsExchanged.team2 >= 0 ? '+' : ''}{s.matchDetails.diamondsExchanged?.team2} DIA
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="mt-3 flex items-center justify-center gap-2 text-[10px] font-bold text-gray-400 uppercase">
-                      <Crown size={12} className="text-yellow-500" />
-                      1st Pick: <span className="text-white">{s.firstPick}</span>
-                    </div>
-
-                    <div className="mt-4 flex gap-2">
-                      {(() => {
-                        const matchDateTime = new Date(`${s.date}T${s.time}`).getTime();
-                        const now = Date.now();
-                        const isTimePassed = now >= matchDateTime;
-                        const canReport = s.status === 'completed' || isTimePassed;
-
-                        if (!canReport) {
-                          return (
-                            <div className="flex-1 py-2 px-3 rounded-lg bg-white/5 border border-white/10 text-[10px] font-black uppercase text-gray-600 text-center flex items-center justify-center gap-2">
-                              <Clock size={14} />
-                              Starts in <CountdownTimer date={s.date} time={s.time} compact />
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <button 
-                            onClick={() => {
-                              setReportingMatch(s);
-                              
-                              setReportData({ 
-                                winnerId: s.matchDetails?.winnerId || '', 
-                                type: s.matchDetails?.resultType || 'win', 
-                                externalLink: '', 
-                                pointsA: s.matchDetails?.pointsExchanged?.team1 || 0, 
-                                pointsB: s.matchDetails?.pointsExchanged?.team2 || 0, 
-                                diamondsA: s.matchDetails?.diamondsExchanged?.team1 || 0, 
-                                diamondsB: s.matchDetails?.diamondsExchanged?.team2 || 0, 
-                                useManual: !!s.matchDetails
-                              });
-                            }}
-                            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${
-                              s.status === 'completed' 
-                                ? 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/5' 
-                                : 'bg-neon-blue/10 text-neon-blue hover:bg-neon-blue hover:text-black border border-neon-blue/20 shadow-[0_0_15px_rgba(0,229,255,0.2)]'
-                            }`}
-                          >
-                            <Trophy size={14} />
-                            {s.status === 'completed' ? 'Update Report' : 'Make Result'}
-                          </button>
-                        );
-                      })()}
-                      
-                      {s.status === 'upcoming' && (
-                        <a 
-                          href={`https://facebook.com/groups/mlbbguildbangladesh`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center justify-center p-2 rounded-lg bg-white/5 text-gray-500 hover:text-white border border-white/5 transition-all"
-                          title="External Tool"
-                        >
-                          <ExternalLink size={14} />
-                        </a>
-                      )}
-                    </div>
-                  </>
-                )}
+          return (
+            <div className="space-y-4">
+              <h3 className="text-xs font-black uppercase text-neon-red flex items-center gap-2">
+                <AlertCircle size={14} className="animate-pulse" /> Pending Results (Matches Finished)
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {pending.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(s => renderScheduleCard(s))}
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          );
+        })()}
+
+        {/* Upcoming Schedules Section */}
+        <div className="space-y-4">
+          <h3 className="text-xs font-black uppercase text-gray-500 flex items-center gap-2">
+            <Calendar size={14} /> Upcoming / Active Schedules
+          </h3>
+          
+          {schedules.length === 0 ? (
+            <div className="text-center py-8 text-gray-500 font-medium text-xs uppercase tracking-widest border border-white/5 rounded-2xl bg-white/5">
+              No schedules created yet
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {schedules
+                .filter(s => {
+                  if (s.status === 'completed' || s.status === 'cancelled') return true;
+                  const matchDateTime = new Date(`${s.date}T${s.time}`).getTime();
+                  return Date.now() < matchDateTime || s.status === 'live';
+                })
+                .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                .map(s => renderScheduleCard(s))
+              }
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
+
+  function renderScheduleCard(s: ScheduleMatch) {
+    return (
+      <div key={s.id} className={`bg-white/5 border p-4 rounded-xl relative group transition-all hover:border-white/20 ${
+        (s.status === 'upcoming' && Date.now() >= new Date(`${s.date}T${s.time}`).getTime()) 
+          ? 'border-neon-red/30 shadow-[0_0_15px_rgba(255,46,99,0.05)]' 
+          : 'border-white/10'
+      }`}>
+        {editingId === s.id ? (
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <input type="date" className="w-full bg-black/50 border border-white/10 rounded p-1 text-xs" value={editMatch.date} onChange={e => setEditMatch({...editMatch, date: e.target.value})} />
+              <input type="time" className="w-full bg-black/50 border border-white/10 rounded p-1 text-xs" value={editMatch.time} onChange={e => setEditMatch({...editMatch, time: e.target.value})} />
+            </div>
+            <div className="flex gap-2 items-center">
+              <select className="w-full bg-black/50 border border-white/10 rounded p-1 text-xs" value={editMatch.team1Id || ''} onChange={e => {
+                const tm = teams.find(t => t.id === e.target.value);
+                setEditMatch({...editMatch, team1Id: tm?.id, team1Name: tm?.teamName, firstPick: ''});
+              }}>
+                <option value="">Team 1</option>
+                {teams.map(t => <option key={t.id} value={t.id}>{t.teamName}</option>)}
+                {!teams.find(t => t.id === editMatch.team1Id) && editMatch.team1Name && <option value={editMatch.team1Id}>{editMatch.team1Name}</option>}
+              </select>
+              <span className="text-[10px]">VS</span>
+               <select className="w-full bg-black/50 border border-white/10 rounded p-1 text-xs" value={editMatch.team2Id || ''} onChange={e => {
+                const tm = teams.find(t => t.id === e.target.value);
+                setEditMatch({...editMatch, team2Id: tm?.id, team2Name: tm?.teamName, firstPick: ''});
+              }}>
+                <option value="">Team 2</option>
+                {teams.map(t => <option key={t.id} value={t.id}>{t.teamName}</option>)}
+                {!teams.find(t => t.id === editMatch.team2Id) && editMatch.team2Name && <option value={editMatch.team2Id}>{editMatch.team2Name}</option>}
+              </select>
+            </div>
+            <div className="flex gap-2 items-center">
+              <select className="w-full bg-black/50 border border-white/10 rounded p-1 text-xs" value={editMatch.firstPick} onChange={e => setEditMatch({...editMatch, firstPick: e.target.value})}>
+                <option value="">1st Pick</option>
+                {editMatch.team1Name && <option value={editMatch.team1Name}>{editMatch.team1Name}</option>}
+                {editMatch.team2Name && <option value={editMatch.team2Name}>{editMatch.team2Name}</option>}
+              </select>
+              <select className="w-full bg-black/50 border border-white/10 rounded p-1 text-xs" value={editMatch.status} onChange={e => setEditMatch({...editMatch, status: e.target.value as any})}>
+                <option value="upcoming">Upcoming</option>
+                <option value="live">Live</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+            <div className="flex justify-end gap-2 mt-2">
+               <button onClick={() => setEditingId(null)} className="text-gray-500 hover:text-white p-1"><X size={16}/></button>
+               <button onClick={handleUpdate} className="text-neon-green hover:text-white p-1"><Check size={16}/></button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
+              <div className="flex items-center gap-3">
+                <span className={`text-[10px] font-black uppercase px-2 py-1 border rounded ${
+                  s.status === 'upcoming' ? 'bg-neon-blue/10 text-neon-blue border-neon-blue/20' :
+                  s.status === 'live' ? 'bg-neon-red text-white border-neon-red animate-pulse' :
+                  s.status === 'completed' ? 'bg-neon-green/10 text-neon-green border-neon-green/20' :
+                  'bg-neon-red/10 text-neon-red border-neon-red/20'
+                }`}>
+                  {s.status}
+                </span>
+                <div className="flex items-center gap-2 text-xs font-medium text-gray-400">
+                  <Calendar size={12} /> {s.date} <Clock size={12} /> {s.time}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pointer-events-auto">
+                <button 
+                  type="button"
+                  onClick={() => { setEditingId(s.id); setEditMatch(s); }} 
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-blue/10 text-neon-blue rounded-lg text-[10px] font-black uppercase border border-neon-blue/20 hover:bg-neon-blue hover:text-black transition-all active:scale-95 shadow-[0_0_10px_rgba(0,229,255,0.1)]"
+                >
+                  <Pencil size={12}/>
+                  Edit
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setDeleteConfirmId(s.id)} 
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-red/10 text-neon-red rounded-lg text-[10px] font-black uppercase border border-neon-red/20 hover:bg-neon-red hover:text-white transition-all active:scale-95 shadow-[0_0_10px_rgba(255,46,99,0.1)]"
+                >
+                  <Trash size={12}/>
+                  Delete
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex justify-between items-center bg-black/50 p-3 rounded-lg border border-white/5">
+              <div className="flex space-x-2 items-center w-[40%] overflow-hidden">
+                <div className="w-6 h-6 rounded bg-black border border-white/10 shrink-0 flex items-center justify-center overflow-hidden">
+                  {teams.find(t => t.id === s.team1Id)?.logoUrl ? 
+                    <ImageWithFallback src={teams.find(t => t.id === s.team1Id)!.logoUrl!} className="w-full h-full object-cover" /> : 
+                    <Users size={12} className={`shrink-0 ${s.matchDetails?.winnerId === s.team1Id ? 'text-neon-blue' : 'text-gray-500'}`} />
+                  }
+                </div>
+                <span className={`text-sm font-black uppercase truncate ${s.matchDetails?.winnerId === s.team1Id ? 'text-neon-blue' : ''}`}>{s.team1Name}</span>
+              </div>
+              <span className="text-[10px] font-black italic text-neon-blue px-2">VS</span>
+              <div className="flex space-x-2 justify-end items-center w-[40%] overflow-hidden text-right">
+                <span className={`text-sm font-black uppercase truncate ${s.matchDetails?.winnerId === s.team2Id ? 'text-neon-blue' : ''}`}>{s.team2Name}</span>
+                <div className="w-6 h-6 rounded bg-black border border-white/10 shrink-0 flex items-center justify-center overflow-hidden">
+                  {teams.find(t => t.id === s.team2Id)?.logoUrl ? 
+                    <ImageWithFallback src={teams.find(t => t.id === s.team2Id)!.logoUrl!} className="w-full h-full object-cover" /> : 
+                    <Users size={12} className={`shrink-0 ${s.matchDetails?.winnerId === s.team2Id ? 'text-neon-blue' : 'text-gray-500'}`} />
+                  }
+                </div>
+              </div>
+            </div>
+
+            {s.status === 'completed' && s.matchDetails && (
+              <div className="mt-3 bg-neon-blue/5 border border-neon-blue/10 rounded-lg p-2 grid grid-cols-2 gap-2 text-[9px] font-black uppercase tracking-widest">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1">
+                    <div className="w-4 h-4 rounded-sm bg-black border border-white/10 flex items-center justify-center overflow-hidden">
+                      {teams.find(t => t.id === s.team1Id)?.logoUrl && <ImageWithFallback src={teams.find(t => t.id === s.team1Id)!.logoUrl!} className="w-full h-full object-cover" />}
+                    </div>
+                    <p className="text-gray-500 truncate">{s.team1Name}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className={s.matchDetails.pointsExchanged?.team1 && s.matchDetails.pointsExchanged.team1 >= 0 ? 'text-neon-green' : 'text-neon-red'}>
+                      {s.matchDetails.pointsExchanged?.team1 && s.matchDetails.pointsExchanged.team1 >= 0 ? '+' : ''}{s.matchDetails.pointsExchanged?.team1} PTS
+                    </span>
+                    <span className={s.matchDetails.diamondsExchanged?.team1 && s.matchDetails.diamondsExchanged.team1 >= 0 ? 'text-neon-cyan' : 'text-neon-red'}>
+                      {s.matchDetails.diamondsExchanged?.team1 && s.matchDetails.diamondsExchanged.team1 >= 0 ? '+' : ''}{s.matchDetails.diamondsExchanged?.team1} DIA
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-1 text-right">
+                  <div className="flex items-center gap-1 justify-end">
+                    <p className="text-gray-500 truncate">{s.team2Name}</p>
+                    <div className="w-4 h-4 rounded-sm bg-black border border-white/10 flex items-center justify-center overflow-hidden">
+                      {teams.find(t => t.id === s.team2Id)?.logoUrl && <ImageWithFallback src={teams.find(t => t.id === s.team2Id)!.logoUrl!} className="w-full h-full object-cover" />}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <span className={s.matchDetails.pointsExchanged?.team2 && s.matchDetails.pointsExchanged.team2 >= 0 ? 'text-neon-green' : 'text-neon-red'}>
+                      {s.matchDetails.pointsExchanged?.team2 && s.matchDetails.pointsExchanged.team2 >= 0 ? '+' : ''}{s.matchDetails.pointsExchanged?.team2} PTS
+                    </span>
+                    <span className={s.matchDetails.diamondsExchanged?.team2 && s.matchDetails.diamondsExchanged.team2 >= 0 ? 'text-neon-cyan' : 'text-neon-red'}>
+                      {s.matchDetails.diamondsExchanged?.team2 && s.matchDetails.diamondsExchanged.team2 >= 0 ? '+' : ''}{s.matchDetails.diamondsExchanged?.team2} DIA
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-3 flex items-center justify-center gap-2 text-[10px] font-bold text-gray-400 uppercase">
+              <Crown size={12} className="text-yellow-500" />
+              1st Pick: <span className="text-white">{s.firstPick}</span>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              {(() => {
+                const matchDateTime = new Date(`${s.date}T${s.time}`).getTime();
+                const now = Date.now();
+                const isTimePassed = now >= matchDateTime;
+                const canReport = s.status === 'completed' || isTimePassed;
+
+                if (!canReport) {
+                  return (
+                    <div className="flex-1 py-2 px-3 rounded-lg bg-white/5 border border-white/10 text-[10px] font-black uppercase text-gray-600 text-center flex items-center justify-center gap-2">
+                      <Clock size={14} />
+                      Starts in <CountdownTimer date={s.date} time={s.time} compact />
+                    </div>
+                  );
+                }
+
+                return (
+                  <button 
+                    onClick={() => {
+                      setReportingMatch(s);
+                      
+                      setReportData({ 
+                        winnerId: s.matchDetails?.winnerId || '', 
+                        type: s.matchDetails?.resultType || 'win', 
+                        externalLink: '', 
+                        pointsA: s.matchDetails?.pointsExchanged?.team1 || 0, 
+                        pointsB: s.matchDetails?.pointsExchanged?.team2 || 0, 
+                        diamondsA: s.matchDetails?.diamondsExchanged?.team1 || 0, 
+                        diamondsB: s.matchDetails?.diamondsExchanged?.team2 || 0, 
+                        useManual: !!s.matchDetails
+                      });
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${
+                      s.status === 'completed' 
+                        ? 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/5' 
+                        : 'bg-neon-blue/10 text-neon-blue hover:bg-neon-blue hover:text-black border border-neon-blue/20 shadow-[0_0_15px_rgba(0,229,255,0.2)]'
+                    }`}
+                  >
+                    <Trophy size={14} />
+                    {s.status === 'completed' ? 'Update Report' : 'Make Result'}
+                  </button>
+                );
+              })()}
+              
+              {s.status === 'upcoming' && (
+                <a 
+                  href={`https://facebook.com/groups/mlbbguildbangladesh`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center p-2 rounded-lg bg-white/5 text-gray-500 hover:text-white border border-white/5 transition-all"
+                  title="External Tool"
+                >
+                  <ExternalLink size={14} />
+                </a>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
 }

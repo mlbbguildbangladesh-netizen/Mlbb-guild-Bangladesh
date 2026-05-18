@@ -39,11 +39,20 @@ const CountdownTimer: React.FC<CountdownTimerProps> = ({ date, time, compact = f
         const difference = targetDate.getTime() - now.getTime();
 
         if (difference > 0) {
-          setTimeLeft({
-            h: Math.floor((difference / (1000 * 60 * 60))),
-            m: Math.floor((difference / 1000 / 60) % 60),
-            s: Math.floor((difference / 1000) % 60)
-          });
+          const hours = Math.floor(difference / (1000 * 60 * 60));
+          if (hours >= 24) {
+            setTimeLeft({
+              h: hours,
+              m: Math.floor((difference / 1000 / 60) % 60),
+              s: Math.floor((difference / 1000) % 60)
+            });
+          } else {
+            setTimeLeft({
+              h: hours,
+              m: Math.floor((difference / 1000 / 60) % 60),
+              s: Math.floor((difference / 1000) % 60)
+            });
+          }
         } else {
           setTimeLeft(null);
         }
@@ -60,34 +69,46 @@ const CountdownTimer: React.FC<CountdownTimerProps> = ({ date, time, compact = f
   if (!timeLeft) return null;
 
   if (compact) {
+    const days = Math.floor(timeLeft.h / 24);
     return (
       <div className="flex items-center gap-1.5 px-2 py-1 bg-neon-red/10 border border-neon-red/30 rounded-md animate-pulse">
         <Timer size={10} className="text-neon-red" />
         <span className="text-[10px] font-black text-neon-red tracking-tighter">
-          {timeLeft.h}H {timeLeft.m}M {timeLeft.s}S
+          {days > 0 ? `${days} DAY${days > 1 ? 'S' : ''}` : `${timeLeft.h}H ${timeLeft.m}M ${timeLeft.s}S`}
         </span>
       </div>
     );
   }
 
+  const days = Math.floor(timeLeft.h / 24);
+
   return (
     <div className="flex items-center gap-3 px-4 py-2 bg-neon-red/10 border border-neon-red/20 rounded-xl animate-pulse">
       <Timer size={16} className="text-neon-red" />
-      <div className="flex gap-2 text-neon-red font-black">
-        <div className="flex flex-col items-center">
-          <span className="text-lg leading-none">{timeLeft.h}</span>
-          <span className="text-[8px] uppercase">HRS</span>
-        </div>
-        <span className="text-lg leading-none">:</span>
-        <div className="flex flex-col items-center">
-          <span className="text-lg leading-none">{timeLeft.m}</span>
-          <span className="text-[8px] uppercase">MIN</span>
-        </div>
-        <span className="text-lg leading-none">:</span>
-        <div className="flex flex-col items-center">
-          <span className="text-lg leading-none">{timeLeft.s}</span>
-          <span className="text-[8px] uppercase">SEC</span>
-        </div>
+      <div className="flex gap-2 text-neon-red font-black items-center">
+        {days > 0 ? (
+          <div className="flex flex-col items-center min-w-[50px]">
+            <span className="text-lg leading-none">{days}</span>
+            <span className="text-[8px] uppercase">{days === 1 ? 'DAY' : 'DAYS'}</span>
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-col items-center min-w-[30px]">
+              <span className="text-lg leading-none">{timeLeft.h.toString().padStart(2, '0')}</span>
+              <span className="text-[8px] uppercase">HRS</span>
+            </div>
+            <span className="text-lg leading-none">:</span>
+            <div className="flex flex-col items-center min-w-[30px]">
+              <span className="text-lg leading-none">{timeLeft.m.toString().padStart(2, '0')}</span>
+              <span className="text-[8px] uppercase">MIN</span>
+            </div>
+            <span className="text-lg leading-none">:</span>
+            <div className="flex flex-col items-center min-w-[30px]">
+              <span className="text-lg leading-none">{timeLeft.s.toString().padStart(2, '0')}</span>
+              <span className="text-[8px] uppercase">SEC</span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

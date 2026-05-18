@@ -24,7 +24,7 @@ export function getAdminDb() {
         isServiceAccountValid = true;
         console.log('[AdminAPI] Firebase Admin initialized with Service Account Key');
       } catch (err) {
-        console.warn('[AdminAPI] FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON. Admin functions may be disabled. Please check your AI Studio settings.');
+        console.warn('[AdminAPI] FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON. Please ensure you copied the FULL content of the downloaded JSON key file from Firebase Console.');
         admin.initializeApp({ projectId: PROJECT_ID });
       }
     } else {
@@ -45,10 +45,10 @@ export function getAdminAuth() {
 // Wrapper for checking if we can perform advanced auth operations
 export function canPerformAdminAuth(): { allowed: boolean; reason?: string } {
   if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    return { allowed: false, reason: "FIREBASE_SERVICE_ACCOUNT_JSON secret is completely missing from environment variables." };
+    return { allowed: false, reason: "The 'FIREBASE_SERVICE_ACCOUNT_JSON' environment variable is missing. Please go to your App Settings and add it. You can find this JSON key in your Firebase Console under 'Project Settings' > 'Service Accounts'." };
   }
   if (!isServiceAccountValid) {
-    return { allowed: false, reason: "FIREBASE_SERVICE_ACCOUNT_JSON is not a valid JSON. You entered: '" + process.env.FIREBASE_SERVICE_ACCOUNT_JSON + "'. Please generate a new private key from Firebase Project Settings > Service Accounts." };
+    return { allowed: false, reason: "The 'FIREBASE_SERVICE_ACCOUNT_JSON' you provided is NOT a valid JSON object. It looks like you entered: '" + process.env.FIREBASE_SERVICE_ACCOUNT_JSON + "'. You must paste the ENTIRE content of the .json file you downloaded from the Firebase Console (the one containing 'private_key', 'client_email', etc.)." };
   }
   return { allowed: true };
 }
@@ -313,6 +313,76 @@ async function startServer() {
       res.json({ content: text });
     } catch (err: any) {
       console.error('[AIHelper] Error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // API Route: Send Push Notification
+  app.post("/api/admin/send-notification", verifyAdmin, async (req, res) => {
+    const { title, body, imageUrl, clickAction, targetUids } = req.body;
+    
+    if (!title || !body) {
+      return res.status(400).json({ error: "Missing title or body" });
+    }
+
+    try {
+      const adminAuthCheck = canPerformAdminAuth();
+      if (!adminAuthCheck.allowed) {
+        return res.status(500).json({ error: adminAuthCheck.reason });
+      }
+
+      const db = getAdminDb();
+      let tokens: string[] = [];
+
+      if (targetUids && Array.isArray(targetUids) && targetUids.length > 0) {
+        // Send to specific users
+        const usersSnap = await db.collection('users').where(admin.firestore.FieldPath.documentId(), 'in', targetUids).get();
+        usersSnap.forEach(doc => {
+          const data = doc.data();
+          if (data.fcmTokens) {
+            tokens = [...tokens, ...data.fcmTokens];
+          }
+        });
+      } else {
+        // Send to all users
+        const usersSnap = await db.collection('users').get();
+        usersSnap.forEach(doc => {
+          const data = doc.data();
+          if (data.fcmTokens) {
+            tokens = [...tokens, ...data.fcmTokens];
+          }
+        });
+      }
+
+      // Remove duplicates
+      tokens = [...new Set(tokens)];
+
+      if (tokens.length === 0) {
+        return res.json({ success: true, sentCount: 0, message: "No registered device tokens found." });
+      }
+
+      const message: any = {
+        notification: {
+          title,
+          body,
+          ...(imageUrl ? { image: imageUrl } : {})
+        },
+        data: {
+          click_action: clickAction || '/'
+        },
+        tokens: tokens.slice(0, 500) // FCM multicast limit is 500
+      };
+
+      const response = await admin.messaging().sendEachForMulticast(message);
+      
+      console.log(`[FCM] Sent notification to ${response.successCount} devices.`);
+      res.json({ 
+        success: true, 
+        sentCount: response.successCount, 
+        failureCount: response.failureCount 
+      });
+    } catch (err: any) {
+      console.error('[FCM] Error sending notification:', err);
       res.status(500).json({ error: err.message });
     }
   });

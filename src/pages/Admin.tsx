@@ -234,6 +234,17 @@ const Admin: React.FC = () => {
   const [modPermissionsEditing, setModPermissionsEditing] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [showManualAdd, setShowManualAdd] = useState(false);
+  
+  // Notification state
+  const [pushNotification, setPushNotification] = useState({
+    title: '',
+    body: '',
+    clickAction: '',
+    targetUids: [] as string[]
+  });
+  const [sendingPush, setSendingPush] = useState(false);
+  const [notificationTargetType, setNotificationTargetType] = useState<'all' | 'selected'>('all');
+  
   const [manualTeam, setManualTeam] = useState({
     teamName: '',
     leaderName: '',
@@ -254,7 +265,8 @@ const Admin: React.FC = () => {
     teamA: '',
     teamB: '',
     winner: '',
-    type: 'win' as MatchResultType
+    type: 'win' as MatchResultType,
+    scheduleId: ''
   });
 
   useEffect(() => {
@@ -484,6 +496,42 @@ const Admin: React.FC = () => {
     } catch (err) {
       console.error(err);
       toast.error("Failed to update maintenance mode.");
+    }
+  };
+
+  const handleSendPushNotification = async () => {
+    if (!pushNotification.title || !pushNotification.body) {
+      toast.error('Title and Body are required');
+      return;
+    }
+
+    setSendingPush(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('No authentication token');
+
+      const response = await fetch('/api/admin/send-notification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          ...pushNotification,
+          targetUids: notificationTargetType === 'all' ? [] : pushNotification.targetUids
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to send notification');
+
+      toast.success(`Successfully sent to ${data.sentCount} devices!`);
+      setPushNotification({ title: '', body: '', clickAction: '', targetUids: [] });
+    } catch (err: any) {
+      console.error('[Admin] Push failed:', err);
+      toast.error(err.message);
+    } finally {
+      setSendingPush(false);
     }
   };
 
@@ -720,28 +768,6 @@ const Admin: React.FC = () => {
       const playersRaw = [manualTeam.player1, manualTeam.player2, manualTeam.player3, manualTeam.player4, manualTeam.player5, manualTeam.player6 || '', manualTeam.player7 || ''];
       const playersList = playersRaw.filter(p => p.trim() !== '');
       
-      // Internal duplicates check
-      const duplicates: number[] = [];
-      const seen = new Map<string, number>();
-      
-      playersRaw.forEach((uid, idx) => {
-        if (!uid.trim()) return;
-        if (seen.has(uid)) {
-          duplicates.push(seen.get(uid)!);
-          duplicates.push(idx);
-        } else {
-          seen.set(uid, idx);
-        }
-      });
-
-      if (duplicates.length > 0) {
-        const firstDup = playersRaw[duplicates[0]];
-        toast.error(`Duplicate player UID ${firstDup} found within this team's roster.`);
-        setManualErrorFields([...new Set(duplicates)]);
-        setProcessingId(null);
-        return;
-      }
-
       if (playersList.length > 0) {
         // 1. Check existing approved teams
         const teamsQuery = query(collection(db, 'teams'), where('players', 'array-contains-any', playersList));
@@ -753,7 +779,10 @@ const Admin: React.FC = () => {
           const matchedUid = playersList.find(uid => (conflictingTeamData.players as string[]).includes(uid));
           
           const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
-          if (conflictIdx !== -1) setManualErrorFields([conflictIdx]);
+          if (conflictIdx !== -1) {
+            setManualErrorFields([conflictIdx]);
+            setManualErrorMap({ [conflictIdx]: `In Team: ${teamName}` });
+          }
 
           toast.error(`Conflict Detected: Player UID ${matchedUid} is already registered on the active team "${teamName}".`);
           setProcessingId(null);
@@ -774,7 +803,10 @@ const Admin: React.FC = () => {
           const matchedUid = playersList.find(uid => (conflictingRegData.players as string[]).includes(uid));
           
           const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
-          if (conflictIdx !== -1) setManualErrorFields([conflictIdx]);
+          if (conflictIdx !== -1) {
+            setManualErrorFields([conflictIdx]);
+            setManualErrorMap({ [conflictIdx]: `Pending Reg: ${teamName}` });
+          }
 
           toast.error(`Conflict Detected: Player UID ${matchedUid} is already in a pending registration for team "${teamName}".`);
           setProcessingId(null);
@@ -837,9 +869,19 @@ const Admin: React.FC = () => {
     }
 
     try {
-      await recordMatchResult(matchData.teamA, matchData.teamB, matchData.winner, matchData.type);
+      await recordMatchResult(
+        matchData.teamA, 
+        matchData.teamB, 
+        matchData.winner as any, 
+        matchData.type,
+        undefined,
+        undefined,
+        false,
+        0,
+        matchData.scheduleId
+      );
       toast.success("Match recorded successfully!");
-      setMatchData({ teamA: '', teamB: '', winner: '', type: 'win' });
+      setMatchData({ teamA: '', teamB: '', winner: '', type: 'win', scheduleId: '' });
     } catch (err) {
       console.error(err);
       toast.error("Failed to record match.");
@@ -981,6 +1023,8 @@ const Admin: React.FC = () => {
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [manualErrorFields, setManualErrorFields] = useState<number[]>([]);
   const [editingErrorFields, setEditingErrorFields] = useState<number[]>([]);
+  const [manualErrorMap, setManualErrorMap] = useState<Record<number, string>>({});
+  const [editingErrorMap, setEditingErrorMap] = useState<Record<number, string>>({});
   const [maintHours, setMaintHours] = useState('0');
   const [maintMins, setMaintMins] = useState('0');
 
@@ -1482,28 +1526,6 @@ const Admin: React.FC = () => {
       const playersRaw = editingTeam.players || [];
       const players = playersRaw.filter(p => p.trim() !== '');
       
-      // Internal duplicates check
-      const duplicates: number[] = [];
-      const seen = new Map<string, number>();
-      
-      playersRaw.forEach((uid, idx) => {
-        if (!uid.trim()) return;
-        if (seen.has(uid)) {
-          duplicates.push(seen.get(uid)!);
-          duplicates.push(idx);
-        } else {
-          seen.set(uid, idx);
-        }
-      });
-
-      if (duplicates.length > 0) {
-        const firstDup = playersRaw[duplicates[0]];
-        toast.error(`Duplicate player UID ${firstDup} found in team roster.`);
-        setEditingErrorFields([...new Set(duplicates)]);
-        setProcessingId(null);
-        return;
-      }
-
       if (players.length > 0) {
         // 1. Check existing approved teams, excluding current team
         const teamsQuery = query(collection(db, 'teams'), where('players', 'array-contains-any', players));
@@ -1518,7 +1540,10 @@ const Admin: React.FC = () => {
           const matchedUid = players.find(uid => (conflictingTeamData.players as string[]).includes(uid));
           
           const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
-          if (conflictIdx !== -1) setEditingErrorFields([conflictIdx]);
+          if (conflictIdx !== -1) {
+            setEditingErrorFields([conflictIdx]);
+            setEditingErrorMap({ [conflictIdx]: `In Team: ${teamName}` });
+          }
 
           toast.error(`Update Conflict: Player UID ${matchedUid} is already registered on team "${teamName}".`);
           setProcessingId(null);
@@ -1539,7 +1564,10 @@ const Admin: React.FC = () => {
           const matchedUid = players.find(uid => (conflictingRegData.players as string[]).includes(uid));
           
           const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
-          if (conflictIdx !== -1) setEditingErrorFields([conflictIdx]);
+          if (conflictIdx !== -1) {
+            setEditingErrorFields([conflictIdx]);
+            setEditingErrorMap({ [conflictIdx]: `Pending Reg: ${teamName}` });
+          }
 
           toast.error(`Update Conflict: Player UID ${matchedUid} is already in a pending registration for team "${teamName}".`);
           setProcessingId(null);
@@ -1789,6 +1817,7 @@ const Admin: React.FC = () => {
             { id: 'seasons', icon: Calendar, name: 'Seasons' },
             { id: 'logo-update', icon: Image, name: 'Logos' },
             { id: 'live-links', icon: Youtube, name: 'Live' },
+            { id: 'push-notifications', icon: Send, name: 'Push' },
             { id: 'settings', icon: Settings, name: 'Config' },
             { id: 'blueprint', icon: FileText, name: 'Blueprint' },
             { id: 'form-builder', icon: Filter, name: 'Forms' },
@@ -1968,14 +1997,66 @@ const Admin: React.FC = () => {
             key="match"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="max-w-2xl mx-auto glass-card p-10 space-y-8 gaming-border-blue"
+            className="max-w-4xl mx-auto space-y-8"
           >
-            <div className="text-center space-y-2">
-              <h2 className="text-3xl font-black">RECORD <span className="text-neon-blue">MATCH RESULT</span></h2>
-              <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">Automatic logic: +50 WIN / -30 LOSS</p>
+            {/* Pending Result Section */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-1.5 h-6 bg-neon-red shadow-[0_0_10px_rgba(255,46,99,0.5)]" />
+                <h2 className="text-xl font-black italic tracking-widest uppercase">Awaiting <span className="text-neon-red">Results</span></h2>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                {allSchedules
+                  .filter(m => {
+                    const matchTime = new Date(`${m.date}T${m.time}`).getTime();
+                    return Date.now() > matchTime && m.status === 'upcoming';
+                  })
+                  .map(m => (
+                    <div key={m.id} className="glass-card p-4 border border-neon-red/20 flex items-center justify-between group">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-black text-white">{m.team1Name}</span>
+                          <span className="text-[10px] font-black text-gray-600">VS</span>
+                          <span className="text-xs font-black text-white">{m.team2Name}</span>
+                        </div>
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                          {new Date(`${m.date}T${m.time}`).toLocaleString()}
+                        </p>
+                      </div>
+                      <button 
+                        onClick={() => setMatchData({
+                          teamA: m.team1Id,
+                          teamB: m.team2Id,
+                          winner: '',
+                          type: 'win',
+                          scheduleId: m.id
+                        })}
+                        className="px-3 py-1.5 bg-neon-red/10 hover:bg-neon-red text-neon-red hover:text-white border border-neon-red/20 rounded text-[10px] font-black uppercase transition-all"
+                      >
+                        Record
+                      </button>
+                    </div>
+                  ))
+                }
+                {allSchedules.filter(m => {
+                  const matchTime = new Date(`${m.date}T${m.time}`).getTime();
+                  return Date.now() > matchTime && m.status === 'upcoming';
+                }).length === 0 && (
+                  <div className="md:col-span-2 glass-card p-6 text-center text-[10px] font-black text-gray-600 uppercase tracking-widest border-dashed border-white/5">
+                    No matches currently awaiting result entry
+                  </div>
+                )}
+              </div>
             </div>
 
-            <form onSubmit={submitMatch} className="space-y-6">
+            <div className="glass-card p-10 space-y-8 gaming-border-blue relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-neon-blue/5 -mr-16 -mt-16 rounded-full blur-3xl" />
+              <div className="text-center space-y-2 relative z-10">
+                <h2 className="text-3xl font-black italic">MANUAL <span className="text-neon-blue">SUBMISSION</span></h2>
+                <p className="text-gray-500 text-sm font-bold uppercase tracking-widest italic leading-tight">Record official tournament outcomes here</p>
+              </div>
+
+              <form onSubmit={submitMatch} className="space-y-6 relative z-10">
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-xs font-black uppercase text-gray-500">Team A (Blue Side)</label>
@@ -2040,7 +2121,8 @@ const Admin: React.FC = () => {
                 CONFIRM MATCH RESULT
               </button>
             </form>
-          </motion.div>
+          </div>
+        </motion.div>
         )}
 
         {activeTab === 'teams' && (
@@ -2087,22 +2169,27 @@ const Admin: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
                   {[1, 2, 3, 4, 5, 6, 7].map((num, idx) => (
-                    <input 
-                      key={num}
-                      placeholder={num <= 5 ? `Player ${num} UID` : `Sub ${num - 5} UID (Optional)`} 
-                      className={`bg-white/5 border rounded-lg p-2 text-xs transition-all ${
-                        manualErrorFields.includes(idx)
-                          ? 'border-neon-red bg-neon-red/5 text-neon-red placeholder:text-neon-red/40'
-                          : 'border-white/10'
-                      }`}
-                      inputMode="numeric" 
-                      value={(manualTeam as any)[`player${num}`]} 
-                      onChange={e => {
-                        setManualTeam({...manualTeam, [`player${num}`]: e.target.value.replace(/\D/g, '')});
-                        if (manualErrorFields.length > 0) setManualErrorFields([]);
-                      }} 
-                      required={num === 1}
-                    />
+                    <div key={num} className="flex flex-col gap-1 w-full">
+                      <input 
+                        placeholder={num <= 5 ? `Player ${num} UID` : `Sub ${num - 5} UID (Optional)`} 
+                        className={`bg-white/5 border rounded-lg p-2 text-xs transition-all w-full ${
+                          manualErrorFields.includes(idx)
+                            ? 'border-neon-red bg-neon-red/5 text-neon-red placeholder:text-neon-red/40'
+                            : 'border-white/10'
+                        }`}
+                        inputMode="numeric" 
+                        value={(manualTeam as any)[`player${num}`]} 
+                        onChange={e => {
+                          setManualTeam({...manualTeam, [`player${num}`]: e.target.value.replace(/\D/g, '')});
+                          if (manualErrorFields.length > 0) setManualErrorFields([]);
+                          if (Object.keys(manualErrorMap).length > 0) setManualErrorMap({});
+                        }} 
+                        required={num === 1}
+                      />
+                      {manualErrorMap[idx] && (
+                        <span className="text-[9px] text-neon-red font-black uppercase tracking-wider">{manualErrorMap[idx]}</span>
+                      )}
+                    </div>
                   ))}
                 </div>
                 <button type="submit" className="w-full py-3 bg-neon-blue text-black font-black rounded-lg">CREATE TEAM MANUALLY</button>
@@ -2987,6 +3074,159 @@ const Admin: React.FC = () => {
                 <p className="text-[10px] text-gray-600">Links added here will appear on the Home Page and Live Section</p>
               </div>
             )}
+          </motion.div>
+        )}
+
+        {activeTab === 'push-notifications' && (
+          <motion.div
+            key="push-notifications-tab"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="max-w-4xl mx-auto space-y-8"
+          >
+            <div className="text-center space-y-2">
+              <h2 className="text-3xl font-black">PUSH <span className="text-neon-blue">NOTIFICATIONS</span></h2>
+              <p className="text-gray-500 text-sm font-bold uppercase tracking-widest italic">Broadcast instant messages to all guild members</p>
+            </div>
+
+            <div className="grid lg:grid-cols-2 gap-8">
+              <div className="glass-card p-8 space-y-6 gaming-border-blue h-fit">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Target Audience</label>
+                    <div className="flex gap-4">
+                      <button 
+                        onClick={() => setNotificationTargetType('all')}
+                        className={`flex-1 py-3 rounded-lg border font-black text-xs transition-all ${
+                          notificationTargetType === 'all' ? 'bg-neon-blue/20 border-neon-blue text-neon-blue' : 'bg-white/5 border-white/10 text-gray-500'
+                        }`}
+                      >
+                        ALL USERS
+                      </button>
+                      <button 
+                        onClick={() => setNotificationTargetType('selected')}
+                        className={`flex-1 py-3 rounded-lg border font-black text-xs transition-all ${
+                          notificationTargetType === 'selected' ? 'bg-neon-blue/20 border-neon-blue text-neon-blue' : 'bg-white/5 border-white/10 text-gray-500'
+                        }`}
+                      >
+                        SELECTED TEAMS
+                      </button>
+                    </div>
+                  </div>
+
+                  {notificationTargetType === 'selected' && (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Select Teams ({pushNotification.targetUids.length})</label>
+                      <div className="max-h-40 overflow-y-auto bg-black/40 rounded-lg p-2 border border-white/5 space-y-1">
+                        {teams.map(team => (
+                          <div 
+                            key={team.id}
+                            onClick={() => {
+                              const newTargets = pushNotification.targetUids.includes(team.ownerId || team.id)
+                                ? pushNotification.targetUids.filter(id => id !== (team.ownerId || team.id))
+                                : [...pushNotification.targetUids, team.ownerId || team.id];
+                              setPushNotification({...pushNotification, targetUids: newTargets});
+                            }}
+                            className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-all ${
+                              pushNotification.targetUids.includes(team.ownerId || team.id) ? 'bg-neon-blue/20' : 'hover:bg-white/5'
+                            }`}
+                          >
+                            <div className={`w-4 h-4 border rounded flex items-center justify-center ${
+                              pushNotification.targetUids.includes(team.ownerId || team.id) ? 'border-neon-blue bg-neon-blue' : 'border-white/20'
+                            }`}>
+                              {pushNotification.targetUids.includes(team.ownerId || team.id) && <Check size={12} className="text-black" />}
+                            </div>
+                            <span className="text-xs font-bold">{team.teamName}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Notification Title</label>
+                    <input 
+                      placeholder="Match Update! 🚀"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg py-3 px-4 outline-none focus:border-neon-blue transition-all"
+                      value={pushNotification.title}
+                      onChange={e => setPushNotification({...pushNotification, title: e.target.value})}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Message Body</label>
+                    <textarea 
+                      placeholder="The finals are starting in 10 minutes..."
+                      rows={3}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg py-3 px-4 outline-none focus:border-neon-blue transition-all resize-none"
+                      value={pushNotification.body}
+                      onChange={e => setPushNotification({...pushNotification, body: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Click Action URL (Optional)</label>
+                    <input 
+                      placeholder="/schedule"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg py-3 px-4 outline-none focus:border-neon-blue transition-all"
+                      value={pushNotification.clickAction}
+                      onChange={e => setPushNotification({...pushNotification, clickAction: e.target.value})}
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleSendPushNotification}
+                  disabled={sendingPush || !pushNotification.title || !pushNotification.body}
+                  className="w-full py-4 bg-neon-blue text-black font-black uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.2)] hover:shadow-neon-blue/40 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {sendingPush ? (
+                    <>
+                      <Loader2 className="animate-spin" size={18} />
+                      TRANSMITTING...
+                    </>
+                  ) : (
+                    <>
+                      <Send size={18} />
+                      SEND PUSH NOTIFICATION
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="glass-card p-6 bg-black/60 border-neon-blue/20 border">
+                  <h3 className="text-[10px] font-black text-neon-blue uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Eye size={14} /> LIVE PREVIEW (MOBILE)
+                  </h3>
+                  <div className="w-full max-w-[280px] mx-auto bg-[#1a1a1a] rounded-[40px] p-2 border-[4px] border-[#333] shadow-2xl relative">
+                    <div className="w-20 h-4 bg-[#333] mx-auto rounded-b-2xl mb-4" />
+                    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 mx-2 animate-bounce">
+                      <div className="flex gap-3">
+                        <div className="w-10 h-10 bg-neon-blue rounded-xl flex items-center justify-center shadow-[0_0_10px_rgba(0,229,255,0.5)]">
+                          <Shield size={20} className="text-black" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-black text-white truncate">{pushNotification.title || "Notification Title"}</p>
+                          <p className="text-[9px] text-gray-400 line-clamp-2">{pushNotification.body || "Message body will appear here..."}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="h-40" />
+                  </div>
+                </div>
+
+                <div className="p-4 bg-yellow-400/5 border border-yellow-400/20 rounded-xl space-y-2">
+                  <div className="flex items-center gap-2 text-yellow-400">
+                    <AlertTriangle size={16} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Important Note</span>
+                  </div>
+                  <p className="text-[10px] text-gray-400">
+                    Push notifications are sent via Firebase Cloud Messaging. Users will only receive them if they have granted notification permission and have internet access. Web push works best on Chrome/Edge (Desktop) and Android devices.
+                  </p>
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -4760,23 +5000,28 @@ const Admin: React.FC = () => {
                   <label className="text-[10px] font-black text-gray-500 uppercase">Roster (Players UIDs)</label>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
                     {[0, 1, 2, 3, 4, 5, 6].map(idx => (
-                      <input
-                        key={idx}
-                        className={`bg-white/5 border rounded-lg p-2 text-[10px] font-mono transition-all ${
-                          editingErrorFields.includes(idx)
-                            ? 'border-neon-red bg-neon-red/5 text-neon-red placeholder:text-neon-red/40'
-                            : 'border-white/10'
-                        }`}
-                        value={editingTeam.players?.[idx] || ''}
-                        onChange={e => {
-                          const newPlayers = Array.isArray(editingTeam.players) ? [...editingTeam.players] : ['', '', '', '', '', '', ''];
-                          while (newPlayers.length < 7) newPlayers.push('');
-                          newPlayers[idx] = e.target.value.replace(/\D/g, '');
-                          setEditingTeam({...editingTeam, players: newPlayers});
-                          if (editingErrorFields.length > 0) setEditingErrorFields([]);
-                        }}
-                        placeholder={idx < 5 ? `Player ${idx + 1}` : `Sub ${idx - 4}`}
-                      />
+                      <div key={idx} className="flex flex-col gap-1 w-full">
+                        <input
+                          className={`bg-white/5 border rounded-lg p-2 text-[10px] font-mono transition-all w-full ${
+                            editingErrorFields.includes(idx)
+                              ? 'border-neon-red bg-neon-red/5 text-neon-red placeholder:text-neon-red/40'
+                              : 'border-white/10'
+                          }`}
+                          value={editingTeam.players?.[idx] || ''}
+                          onChange={e => {
+                            const newPlayers = Array.isArray(editingTeam.players) ? [...editingTeam.players] : ['', '', '', '', '', '', ''];
+                            while (newPlayers.length < 7) newPlayers.push('');
+                            newPlayers[idx] = e.target.value.replace(/\D/g, '');
+                            setEditingTeam({...editingTeam, players: newPlayers});
+                            if (editingErrorFields.length > 0) setEditingErrorFields([]);
+                            if (Object.keys(editingErrorMap).length > 0) setEditingErrorMap({});
+                          }}
+                          placeholder={idx < 5 ? `Player ${idx + 1}` : `Sub ${idx - 4}`}
+                        />
+                        {editingErrorMap[idx] && (
+                          <span className="text-[9px] text-neon-red font-black uppercase tracking-wider">{editingErrorMap[idx]}</span>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>

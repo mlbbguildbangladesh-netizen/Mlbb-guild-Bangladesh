@@ -82,6 +82,7 @@ const Registration: React.FC = () => {
 
   const [error, setError] = useState<string | null>(null);
   const [errorFields, setErrorFields] = useState<number[]>([]);
+  const [errorMap, setErrorMap] = useState<Record<number, string>>({});
   const [showPreview, setShowPreview] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -112,6 +113,7 @@ const Registration: React.FC = () => {
     setFormData({ ...formData, players: newPlayers });
     if (error) setError(null);
     if (errorFields.length > 0) setErrorFields([]);
+    if (Object.keys(errorMap).length > 0) setErrorMap({});
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'card') => {
@@ -194,28 +196,6 @@ const Registration: React.FC = () => {
         return;
       }
       
-      // Internal duplicates check
-      const duplicates: number[] = [];
-      const seen = new Map<string, number>();
-      
-      playersRaw.forEach((uid, idx) => {
-        if (!uid.trim()) return;
-        if (seen.has(uid)) {
-          duplicates.push(seen.get(uid)!);
-          duplicates.push(idx);
-        } else {
-          seen.set(uid, idx);
-        }
-      });
-
-      if (duplicates.length > 0) {
-        const firstDup = playersRaw[duplicates[0]];
-        setError(`Registration Error: Duplicate player UID ${firstDup} found in your team roster.`);
-        setErrorFields([...new Set(duplicates)]);
-        setLoading(false);
-        return;
-      }
-
       if (playerIdsToCheck.length > 0) {
         // 1. Check existing approved teams
         const teamsQuery = query(collection(db, 'teams'), where('players', 'array-contains-any', playerIdsToCheck));
@@ -228,34 +208,38 @@ const Registration: React.FC = () => {
           
           // Find which field has this matchedUid
           const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
-          if (conflictIdx !== -1) setErrorFields([conflictIdx]);
+          if (conflictIdx !== -1) {
+            setErrorFields([conflictIdx]);
+            setErrorMap({ [conflictIdx]: `In Team: ${teamName}` });
+          }
           
           setError(`Conflict Detected: Player UID ${matchedUid} is already registered on active team "${teamName}".`);
           setLoading(false);
           return;
         }
 
-        // 2. Check pending registrations (ONLY for staff to avoid permission leaks for regular users)
-        if (isAdmin || isModerator) {
-          const regQuery = query(
-            collection(db, 'registrations'), 
-            where('status', '==', 'pending'),
-            where('players', 'array-contains-any', playerIdsToCheck)
-          );
-          const regSnapshot = await getDocs(regQuery);
+        // 2. Check pending registrations
+        const regQuery = query(
+          collection(db, 'registrations'), 
+          where('status', '==', 'pending'),
+          where('players', 'array-contains-any', playerIdsToCheck)
+        );
+        const regSnapshot = await getDocs(regQuery);
+        
+        if (!regSnapshot.empty) {
+          const conflictingRegData = regSnapshot.docs[0].data();
+          const teamName = conflictingRegData.teamName;
+          const matchedUid = playerIdsToCheck.find(uid => (conflictingRegData.players as string[]).includes(uid));
           
-          if (!regSnapshot.empty) {
-            const conflictingRegData = regSnapshot.docs[0].data();
-            const teamName = conflictingRegData.teamName;
-            const matchedUid = playerIdsToCheck.find(uid => (conflictingRegData.players as string[]).includes(uid));
-            
-            const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
-            if (conflictIdx !== -1) setErrorFields([conflictIdx]);
-  
-            setError(`Conflict Detected: Player UID ${matchedUid} is already in a pending registration for team "${teamName}".`);
-            setLoading(false);
-            return;
+          const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
+          if (conflictIdx !== -1) {
+            setErrorFields([conflictIdx]);
+            setErrorMap({ [conflictIdx]: `Pending Reg: ${teamName}` });
           }
+
+          setError(`Conflict Detected: Player UID ${matchedUid} is already in a pending registration for team "${teamName}".`);
+          setLoading(false);
+          return;
         }
       }
       // --- End UID Uniqueness Check ---
@@ -917,6 +901,9 @@ const Registration: React.FC = () => {
                         : 'border-white/10 focus:border-neon-blue'
                     }`}
                   />
+                  {errorMap[i] && (
+                    <div className="text-[10px] text-neon-red font-black uppercase tracking-wider ml-1">{errorMap[i]}</div>
+                  )}
                 </div>
               ))}
             </div>

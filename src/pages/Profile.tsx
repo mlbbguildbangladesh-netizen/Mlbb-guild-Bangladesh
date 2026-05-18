@@ -34,6 +34,7 @@ const Profile: React.FC = () => {
   const [emailLoading, setEmailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorFields, setErrorFields] = useState<number[]>([]);
+  const [errorMap, setErrorMap] = useState<Record<number, string>>({});
   const [success, setSuccess] = useState<string | null>(null);
   const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
 
@@ -84,7 +85,7 @@ const Profile: React.FC = () => {
           if (!querySnap.empty) {
             const allTeams = querySnap.docs.map(d => ({ id: d.id, ...d.data() } as Team));
             setUserTeams(allTeams);
-            const activeTeamId = selectedTeamId || allTeams[0].id;
+            const activeTeamId = selectedTeamId || (allTeams.find(t => t.id === user?.teamId)?.id) || allTeams[0].id;
             teamDoc = querySnap.docs.find(d => d.id === activeTeamId) || querySnap.docs[0];
           } else {
             // Fallback for legacy teams that used userId as Document ID
@@ -293,24 +294,6 @@ const Profile: React.FC = () => {
       const currentPlayers = playersRaw.filter(p => p.trim() !== '');
       const originalPlayers = team?.players || [];
       
-      // Basic internal duplicate check (fast)
-      const duplicates: number[] = [];
-      const seen = new Map<string, number>();
-      playersRaw.forEach((uid, idx) => {
-        if (!uid.trim()) return;
-        if (seen.has(uid)) {
-          duplicates.push(seen.get(uid)!);
-          duplicates.push(idx);
-        } else {
-          seen.set(uid, idx);
-        }
-      });
-
-      if (duplicates.length > 0) {
-        setErrorFields([...new Set(duplicates)]);
-        throw new Error(`Duplicate player UID ${playersRaw[duplicates[0]]} found in your roster.`);
-      }
-
       // Only run expensive Firestore uniqueness checks if the roster actually changed
       const playersChanged = JSON.stringify([...currentPlayers].sort()) !== JSON.stringify([...originalPlayers].sort());
       const actualUserId = (isAdmin && team?.ownerId) ? team.ownerId : targetId;
@@ -355,15 +338,22 @@ const Profile: React.FC = () => {
         if (conflict) {
           const matchedUid = currentPlayers.find(uid => (conflict.data().players as string[]).includes(uid));
           const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
-          if (conflictIdx !== -1) setErrorFields([conflictIdx]);
+          if (conflictIdx !== -1) {
+            setErrorFields([conflictIdx]);
+            setErrorMap({ [conflictIdx]: `In Team: ${conflict.data().teamName}` });
+          }
           throw new Error(`Player UID ${matchedUid} is already on active team "${conflict.data().teamName}".`);
         }
 
-        if (!regsSnap.empty) {
-          const matchedUid = currentPlayers.find(uid => (regsSnap.docs[0].data().players as string[]).includes(uid));
+        const conflictReg = regsSnap.docs.find(d => d.data().ownerId !== actualUserId);
+        if (conflictReg) {
+          const matchedUid = currentPlayers.find(uid => (conflictReg.data().players as string[]).includes(uid));
           const conflictIdx = playersRaw.findIndex(u => u === matchedUid);
-          if (conflictIdx !== -1) setErrorFields([conflictIdx]);
-          throw new Error(`Player UID ${matchedUid} is in a pending registration for team "${regsSnap.docs[0].data().teamName}".`);
+          if (conflictIdx !== -1) {
+            setErrorFields([conflictIdx]);
+            setErrorMap({ [conflictIdx]: `Pending Reg: ${conflictReg.data().teamName}` });
+          }
+          throw new Error(`Player UID ${matchedUid} is in a pending registration for team "${conflictReg.data().teamName}".`);
         }
       }
 
@@ -741,7 +731,19 @@ const Profile: React.FC = () => {
           <select 
             className="w-full md:w-auto bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm font-bold focus:border-neon-blue outline-none transition-colors"
             value={team?.id || ''}
-            onChange={(e) => setSelectedTeamId(e.target.value)}
+            onChange={async (e) => {
+              const newId = e.target.value;
+              setSelectedTeamId(newId);
+              if (auth.currentUser && user?.id === auth.currentUser.uid) {
+                try {
+                  await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+                    teamId: newId
+                  });
+                } catch(err) {
+                  console.error("Failed to update active team", err);
+                }
+              }
+            }}
           >
             {userTeams.map(t => (
               <option key={t.id} value={t.id}>{t.teamName}</option>
@@ -1099,6 +1101,9 @@ const Profile: React.FC = () => {
                   }`}
                   placeholder={index < 5 ? "UID (Numbers Only)" : "UID (Sub - Optional)"}
                 />
+                {errorMap[index] && (
+                  <div className="text-[10px] text-neon-red font-black mt-1 uppercase tracking-wider">{errorMap[index]}</div>
+                )}
               </div>
             ))}
           </fieldset>

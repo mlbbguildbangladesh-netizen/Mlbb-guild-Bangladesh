@@ -205,14 +205,21 @@ const Schedule: React.FC = () => {
       });
     });
     return combined.sort((a, b) => {
+      const now = Date.now();
       const dateA = a.date !== 'TBD' ? new Date(`${a.date}T${a.time !== 'TBD' ? a.time : '00:00'}`).getTime() : Infinity;
       const dateB = b.date !== 'TBD' ? new Date(`${b.date}T${b.time !== 'TBD' ? b.time : '00:00'}`).getTime() : Infinity;
+      
+      // Chronological ASC: earlier matches (including finished) at the top, upcoming below them.
       return dateA - dateB;
     });
   }, [matches, challenges, teams]);
 
   const filteredMatches = useMemo(() => {
+    const now = Date.now();
     return allMatchesList.filter(match => {
+      const matchDateTime = match.date !== 'TBD' ? new Date(`${match.date}T${match.time !== 'TBD' ? match.time : '00:00'}`).getTime() : Infinity;
+      const isTimePassed = now > (matchDateTime + 60 * 60 * 1000); // 1 hour grace period for "live" or simple logic, user said "once 8 o clock is over"
+
       const matchesSearch = 
         match.team1Name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         match.team2Name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -222,6 +229,11 @@ const Schedule: React.FC = () => {
       if (typeFilter !== 'all') {
         const mType = match.matchType || 'official';
         if (mType !== typeFilter) return false;
+      }
+
+      // Hide upcoming matches if time has passed and they aren't marked as 'live' or 'completed'
+      if (match.status === 'upcoming' && now > matchDateTime && activeTab !== 'results') {
+        return false;
       }
 
       if (activeTab === 'all') return true;

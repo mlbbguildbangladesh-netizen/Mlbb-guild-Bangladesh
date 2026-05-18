@@ -84,7 +84,16 @@ export default function SoloPlayers() {
     return false;
   }, [user, isAdmin, isModerator, settings?.authorizedRecruiters, teams]);
 
-  const currentTeam = useMemo(() => teams.find(t => t.ownerId === user?.id), [teams, user]);
+  const currentTeam = useMemo(() => {
+    if (!user) return null;
+    if (user.teamId) {
+      const activeTeam = teams.find(t => t.id === user.teamId);
+      if (activeTeam && (activeTeam.ownerId === user.id || activeTeam.players.includes(user.id))) {
+         return activeTeam;
+      }
+    }
+    return teams.find(t => t.ownerId === user.id) || null;
+  }, [teams, user]);
 
   useEffect(() => {
     const pQ = query(collection(db, 'soloPlayers'), orderBy('createdAt', 'desc'));

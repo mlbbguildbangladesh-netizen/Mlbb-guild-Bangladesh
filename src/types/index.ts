@@ -1,6 +1,6 @@
 export type Role = 'admin' | 'team';
 export type RegistrationStatus = 'pending' | 'approved' | 'rejected';
-export type MatchResultType = 'win' | 'loss' | 'walkout' | 'rematch';
+export type MatchResultType = 'win' | 'loss' | 'walkout' | 'rematch' | 'cancelled';
 export type TransactionType = 'win' | 'loss' | 'bonus' | 'shop' | 'penalty' | 'expense';
 
 export interface FormFieldSetting {
