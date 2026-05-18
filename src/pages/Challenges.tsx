@@ -74,6 +74,7 @@ const Challenges: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedBet, setSelectedBet] = useState('');
   const [selectedPick, setSelectedPick] = useState<'1st' | '2nd' | ''>('');
+  const [selectedTeamSwitch, setSelectedTeamSwitch] = useState<boolean>(false);
   const [occupiedSlots, setOccupiedSlots] = useState<string[]>([]);
   const [teamOccupiedSlots, setTeamOccupiedSlots] = useState<string[]>([]);
 
@@ -346,7 +347,8 @@ const Challenges: React.FC = () => {
       const details: any = {
         date: selectedDate || '',
         time: selectedTime || '',
-        bet: settings?.bettingEnabled ? (selectedBet || '') : ''
+        bet: settings?.bettingEnabled ? (selectedBet || '') : '',
+        teamSwitch: selectedTeamSwitch
       };
 
       if (selectedPick) {
@@ -378,6 +380,8 @@ const Challenges: React.FC = () => {
       setSelectedTime('');
       setSelectedDate('');
       setSelectedPick('');
+      setSelectedTeamSwitch(false);
+      if (settings?.bettingEnabled) setSelectedBet('');
       toast.success("Challenge sent successfully!");
 
       // Notify target team
@@ -824,6 +828,20 @@ const Challenges: React.FC = () => {
                                <span>Date</span>
                                <span className="text-white">{details?.date}</span>
                              </div>
+                             {details?.sideSelection && (
+                               <div className="flex justify-between items-center text-[10px] font-bold uppercase text-gray-400">
+                                 <span>Pick Turn</span>
+                                 <span className="text-neon-blue">{details.sideSelection}</span>
+                               </div>
+                             )}
+                             {details?.teamSwitch !== undefined && (
+                               <div className="flex justify-between items-center text-[10px] font-bold uppercase text-gray-400">
+                                 <span>Team Switch</span>
+                                 <span className={details.teamSwitch ? "text-neon-red" : "text-gray-500"}>
+                                   {details.teamSwitch ? 'YES' : 'NO'}
+                                 </span>
+                               </div>
+                             )}
                           </div>
 
                           <div className="grid grid-cols-2 gap-3">
@@ -916,6 +934,7 @@ const Challenges: React.FC = () => {
                                     status: 'upcoming',
                                     bet: betValue,
                                     firstPick: details?.sideSelection || '1st',
+                                    teamSwitch: details?.teamSwitch || false,
                                     createdAt: serverTimestamp()
                                   });
 
@@ -1061,6 +1080,18 @@ const Challenges: React.FC = () => {
                            {match.details.time}
                          </div>
                       </div>
+                      <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                         {match.details.sideSelection && (
+                           <div className="flex items-center gap-2">
+                             Pick: <span className="text-white">{match.details.sideSelection}</span>
+                           </div>
+                         )}
+                         {match.details.teamSwitch !== undefined && (
+                           <div className="flex items-center gap-2">
+                             Team Switch: <span className={match.details.teamSwitch ? "text-neon-red" : "text-white"}>{match.details.teamSwitch ? 'YES' : 'NO'}</span>
+                           </div>
+                         )}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
@@ -1130,6 +1161,16 @@ const Challenges: React.FC = () => {
                           <Clock size={14} className="text-gray-500" />
                           <span className="text-[10px] font-black uppercase text-white">{match.time}</span>
                         </div>
+                        {match.firstPick && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black uppercase text-gray-500">Pick: <span className="text-white">{match.firstPick}</span></span>
+                          </div>
+                        )}
+                        {match.teamSwitch !== undefined && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black uppercase text-gray-500">Switch: <span className={match.teamSwitch ? "text-neon-red" : "text-white"}>{match.teamSwitch ? 'YES' : 'NO'}</span></span>
+                          </div>
+                        )}
                         <Link to={`/schedule/${match.id}`} className="px-4 py-2 bg-neon-blue/10 border border-neon-blue/20 text-neon-blue rounded text-[10px] font-black uppercase tracking-widest hover:bg-neon-blue/20 transition-all">
                           MISSION DETAILS
                         </Link>
@@ -1337,6 +1378,22 @@ const Challenges: React.FC = () => {
                     <option value="1st">First</option>
                     <option value="2nd">Second</option>
                   </select>
+                </div>
+                <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl py-3 px-4">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 mr-4">Team Switch</label>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTeamSwitch(!selectedTeamSwitch)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      selectedTeamSwitch ? 'bg-neon-blue' : 'bg-gray-700'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        selectedTeamSwitch ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
                 </div>
               </div>
 

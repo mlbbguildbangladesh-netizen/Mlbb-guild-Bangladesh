@@ -56,7 +56,7 @@ export interface Team {
   recruitmentSlots?: number;
 }
 
-export const MATCH_SLOTS = ["20:00", "20:30", "21:00", "21:30", "22:00"] as const;
+export const MATCH_SLOTS = ["20:00", "20:30", "21:00", "21:30", "22:00", "22:30", "23:00"] as const;
 
 export interface Match {
   id: string;
@@ -106,6 +106,7 @@ export interface ChallengeDetails {
   preferredDate?: string;
   preferredTime?: string;
   sideSelection?: '1st' | '2nd';
+  teamSwitch?: boolean;
 }
 
 export interface Challenge {
@@ -126,6 +127,7 @@ export interface ScheduleMatch {
   date: string;
   time: string;
   firstPick: string;
+  teamSwitch?: boolean;
   status: 'upcoming' | 'live' | 'completed' | 'cancelled';
   matchType?: 'official' | 'challenge' | 'seasonal';
   bet?: number;
