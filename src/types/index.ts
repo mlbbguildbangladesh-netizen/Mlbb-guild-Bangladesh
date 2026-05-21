@@ -36,6 +36,7 @@ export interface Team {
   seasonId?: string;
   teamName: string;
   leaderName: string;
+  customData?: Record<string, any>;
   points: number;
   diamonds: number;
   streak: number;
@@ -52,7 +53,6 @@ export interface Team {
   gameId?: string;
   serverId?: string;
   phoneNumber?: string;
-  customData?: Record<string, any>;
   recruitmentSlots?: number;
 }
 
@@ -131,11 +131,13 @@ export interface ScheduleMatch {
   status: 'upcoming' | 'live' | 'completed' | 'cancelled';
   matchType?: 'official' | 'challenge' | 'seasonal';
   bet?: number;
+  streamUrl?: string;
   matchDetails?: {
     winnerId: string;
     resultType: MatchResultType;
     pointsExchanged?: { team1: number, team2: number };
     diamondsExchanged?: { team1: number, team2: number };
+    externalLink?: string;
   };
   createdAt?: any;
 }
@@ -201,6 +203,13 @@ export interface LiveLink {
   createdAt: any;
 }
 
+export interface GoogleSheetConfig {
+  id: string;
+  title: string;
+  url: string;
+  isPublic: boolean;
+}
+
 export interface AppSetting {
   id: string;
   currentSeasonId?: string;
@@ -231,6 +240,7 @@ export interface AppSetting {
   showDiamonds?: boolean;
   showSoloPlayers?: boolean;
   allowSoloRegistration?: boolean;
+  communityRules?: string;
   heroAnnouncement?: string;
   heroTitle?: string;
   heroSubtitle?: string;
@@ -247,4 +257,5 @@ export interface AppSetting {
     email: string;
     permissions: string[];
   }[];
+  googleSheets?: GoogleSheetConfig[];
 }

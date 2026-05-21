@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Home, Trophy, Users, ShoppingCart, User as UserIcon, LogOut, Menu, X, LayoutDashboard, Swords, AlertCircle, Shield, Diamond, Calendar } from 'lucide-react';
+import { Home, Trophy, Users, ShoppingCart, User as UserIcon, LogOut, Menu, X, LayoutDashboard, Swords, AlertCircle, Shield, Diamond, Calendar, History, Table, Book } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../lib/firebase';
@@ -23,11 +23,17 @@ const Navbar: React.FC = () => {
     { name: 'Home', path: '/', icon: Home },
   ];
 
+  const hasPublicSheets = settings?.googleSheets?.some(s => s.isPublic);
+  if (isAdmin || hasPublicSheets) {
+    navItems.push({ name: 'Database', path: '/database', icon: Table });
+  }
+
   if (settings?.showLeaderboard !== false) {
     navItems.push({ name: 'Leaderboard', path: '/leaderboard', icon: Trophy });
   }
 
   navItems.push({ name: 'Schedule', path: '/schedule', icon: Calendar });
+  navItems.push({ name: 'Results', path: '/results', icon: History });
 
   if (settings?.showChallenges !== false) {
     navItems.push({ name: 'Challenges', path: '/challenges', icon: Swords });
@@ -58,14 +64,16 @@ const Navbar: React.FC = () => {
   return (
     <nav className="fixed top-0 left-0 w-full z-50 bg-black/60 backdrop-blur-lg border-b border-white/10">
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-        <NavLink to="/" className="flex items-center gap-2 group">
-          <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center neon-glow-blue border border-white/10 gaming-gradient-blue transition-transform group-hover:scale-110">
-            <Logo className="text-xl" />
-          </div>
-          <span className="text-xl font-extrabold tracking-tighter gaming-text-gradient">
-            {firstPart} <span className="text-neon-blue">{lastPart}</span>
-          </span>
-        </NavLink>
+        <div className="flex items-center gap-4">
+          <NavLink to="/" className="flex items-center gap-2 group">
+            <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center neon-glow-blue border border-white/10 gaming-gradient-blue transition-transform group-hover:scale-110">
+              <Logo className="text-xl" />
+            </div>
+            <span className="text-xl font-extrabold tracking-tighter gaming-text-gradient">
+              {firstPart} <span className="text-neon-blue">{lastPart}</span>
+            </span>
+          </NavLink>
+        </div>
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-6">

@@ -12,6 +12,7 @@ import { Suspense, lazy } from 'react';
 
 // Lazy load pages
 const Home = lazy(() => import('./pages/Home'));
+const Database = lazy(() => import('./pages/Database'));
 const Leaderboard = lazy(() => import('./pages/Leaderboard'));
 const Teams = lazy(() => import('./pages/Teams'));
 const Registration = lazy(() => import('./pages/Registration'));
@@ -20,6 +21,7 @@ const Login = lazy(() => import('./pages/Login'));
 const Admin = lazy(() => import('./pages/Admin'));
 const Challenges = lazy(() => import('./pages/Challenges'));
 const Schedule = lazy(() => import('./pages/Schedule'));
+const Results = lazy(() => import('./pages/Results'));
 const Profile = lazy(() => import('./pages/Profile'));
 const SoloPlayers = lazy(() => import('./pages/SoloPlayers'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
@@ -72,8 +74,10 @@ export default function App() {
           <Suspense fallback={<LoadingFallback />}>
             <Routes>
               <Route path="/" element={<Home />} />
+              <Route path="/database" element={<Database />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
               <Route path="/schedule" element={<Schedule />} />
+              <Route path="/results" element={<Results />} />
               <Route path="/teams" element={
                 <ProtectedRoute adminOnly>
                   <Teams />

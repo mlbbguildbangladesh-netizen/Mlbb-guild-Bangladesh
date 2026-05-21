@@ -797,7 +797,10 @@ export default function SoloPlayers() {
                         </button>
                         {player.fbLink ? (
                           <button 
-                            onClick={(e) => openExternalLink(e, player.fbLink)}
+                            onClick={(e) => {
+                              const fbUrl = player.fbLink.includes('facebook.com') ? player.fbLink : `https://facebook.com/${player.fbLink}`;
+                              openExternalLink(e, fbUrl);
+                            }}
                             className="flex items-center justify-center gap-2 py-3 bg-[#1877F2] text-white border border-[#1877F2]/20 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-[#1877F2]/90 transition-all shadow-[0_0_15px_rgba(24,119,242,0.3)]"
                           >
                             <Facebook size={14} />
@@ -1164,7 +1167,7 @@ export default function SoloPlayers() {
                  </div>
                  <div className="space-y-2">
                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">FB Communications</label>
-                   <input required type="url" value={formData.fbLink} onChange={e => setFormData({...formData, fbLink: e.target.value})} placeholder="FACEBOOK PROFILE URL..." className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-3.5 text-xs font-black uppercase tracking-wider focus:border-neon-blue focus:bg-black/60 transition-all outline-none" />
+                   <input required type="text" value={formData.fbLink} onChange={e => setFormData({...formData, fbLink: e.target.value})} placeholder="URL or USERNAME..." className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-3.5 text-xs font-black uppercase tracking-wider focus:border-neon-blue focus:bg-black/60 transition-all outline-none" />
                  </div>
                  <div className="space-y-2 md:col-span-2">
                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Main Tactical Role</label>

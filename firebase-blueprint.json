@@ -18,6 +18,10 @@
       "description": "Participating esports team",
       "type": "object",
       "properties": {
+        "customData": {
+          "type": "object",
+          "additionalProperties": true
+        },
         "teamName": { "type": "string" },
         "leaderName": { "type": "string" },
         "points": { "type": "number" },

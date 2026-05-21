@@ -77,6 +77,7 @@ const Challenges: React.FC = () => {
   const [selectedTeamSwitch, setSelectedTeamSwitch] = useState<boolean>(false);
   const [occupiedSlots, setOccupiedSlots] = useState<string[]>([]);
   const [teamOccupiedSlots, setTeamOccupiedSlots] = useState<string[]>([]);
+  const [acceptModalData, setAcceptModalData] = useState<{ c: Challenge, fromTeam: Team } | null>(null);
 
   const activeChallenges = useMemo(() => {
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
@@ -261,7 +262,7 @@ const Challenges: React.FC = () => {
     }
 
     // Rule: Season Match Limit
-    const limit = settings?.challengeLimitPerUser || 10;
+    const limit = settings?.challengeLimitPerUser || 7;
     if ((currentTeam.matchesThisSeason || 0) >= limit) {
       toast.error("Limit Reached");
       return;
@@ -561,6 +562,150 @@ const Challenges: React.FC = () => {
     return matches;
   }, [challenges, teams]);
 
+  const executeAccept = async (c: Challenge, fromTeam: Team) => {
+    try {
+      if (!currentTeam || !fromTeam) return;
+
+      const activeSeasonId = settings?.currentSeasonId;
+      if (!activeSeasonId) {
+        toast.error("No active season is currently set.");
+        return;
+      }
+      if (currentTeam.seasonId !== activeSeasonId || fromTeam.seasonId !== activeSeasonId) {
+        toast.error("Both guilds must be in the active season to participate.");
+        return;
+      }
+
+      const limit = settings?.challengeLimitPerUser || 7;
+      
+      const getMatchCount = async (teamId: string) => {
+        const q1 = query(collection(db, 'schedules'), 
+          where('team1Id', '==', teamId), 
+          where('status', '!=', 'cancelled')
+        );
+        const q2 = query(collection(db, 'schedules'), 
+          where('team2Id', '==', teamId), 
+          where('status', '!=', 'cancelled')
+        );
+        const [s1, s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+        return s1.size + s2.size;
+      };
+
+      const [currentMatches, challengerMatches] = await Promise.all([
+        getMatchCount(currentTeam.id),
+        getMatchCount(fromTeam.id)
+      ]);
+
+      if (currentMatches >= limit) {
+        toast.error("Limit Reached");
+        return;
+      }
+      if (challengerMatches >= limit) {
+        toast.error("Opponent Limit Reached");
+        return;
+      }
+
+      const qPair1 = query(collection(db, 'schedules'),
+        where('team1Id', '==', fromTeam.id),
+        where('team2Id', '==', currentTeam.id),
+        where('status', '!=', 'cancelled')
+      );
+      const qPair2 = query(collection(db, 'schedules'),
+        where('team1Id', '==', currentTeam.id),
+        where('team2Id', '==', fromTeam.id),
+        where('status', '!=', 'cancelled')
+      );
+      const [pairSnap1, pairSnap2] = await Promise.all([getDocs(qPair1), getDocs(qPair2)]);
+
+      if (!pairSnap1.empty || !pairSnap2.empty) {
+        toast.error("You have already played or have a scheduled challenge against this team this season.");
+        return;
+      }
+
+      const details = c.challengeDetails?.[currentTeam.id];
+
+      const batch = writeBatch(db);
+      
+      const scheduleRef = doc(collection(db, 'schedules'));
+      const betValue = Number(details?.bet || 0);
+      batch.set(scheduleRef, {
+        team1Id: c.fromTeamId,
+        team1Name: fromTeam.teamName || 'Unknown',
+        team2Id: currentTeam.id,
+        team2Name: currentTeam.teamName,
+        date: details?.date || new Date().toISOString().split('T')[0],
+        time: details?.time || "20:00",
+        matchType: 'challenge',
+        status: 'upcoming',
+        bet: betValue,
+        firstPick: details?.sideSelection || '1st',
+        teamSwitch: details?.teamSwitch || false,
+        createdAt: serverTimestamp()
+      });
+
+      batch.update(doc(db, 'teams', c.fromTeamId), {
+        matchesThisSeason: (fromTeam.matchesThisSeason || 0) + 1
+      });
+      batch.update(doc(db, 'teams', currentTeam.id), {
+        matchesThisSeason: (currentTeam.matchesThisSeason || 0) + 1
+      });
+
+      const fromChallengeRef = doc(db, 'challenges', c.fromTeamId);
+      const newTargets = (c.targetTeamIds || []).filter(id => id !== currentTeam.id);
+      if (newTargets.length === 0) {
+        batch.delete(fromChallengeRef);
+      } else {
+        const newDetails = { ...c.challengeDetails };
+        delete newDetails[currentTeam.id];
+        batch.update(fromChallengeRef, {
+          targetTeamIds: newTargets,
+          challengeDetails: newDetails
+        });
+      }
+
+      const userChallenge = challenges.find(ch => ch.fromTeamId === currentTeam.id);
+      if (userChallenge && userChallenge.targetTeamIds.includes(fromTeam.id)) {
+        const userChallengeRef = doc(db, 'challenges', currentTeam.id);
+        const updatedUserTargets = userChallenge.targetTeamIds.filter(id => id !== fromTeam.id);
+        if (updatedUserTargets.length === 0) {
+          batch.delete(userChallengeRef);
+        } else {
+          const updatedUserDetails = { ...userChallenge.challengeDetails || {} };
+          delete updatedUserDetails[fromTeam.id];
+          batch.update(userChallengeRef, {
+            targetTeamIds: updatedUserTargets,
+            challengeDetails: updatedUserDetails
+          });
+        }
+      }
+
+      await batch.commit();
+      
+      setAcceptModalData(null);
+      
+      toast.success(
+        `CHALLENGE ACCEPTED! Match added to schedule.\n\n` +
+        `📢 Winning will result in receiving +50 points and +20 diamonds.\n` +
+        `📢 Losing will result in subtracting -20 points and -30 diamonds.`,
+        { duration: 8000, icon: '⚔️' }
+      );
+
+      if (fromTeam?.ownerId) {
+        await createNotification(
+          fromTeam.ownerId,
+          'Challenge Accepted!',
+          `${currentTeam.teamName} has accepted your challenge! Match added to schedule. ` +
+          `Winning results in receiving +50 points & +20 diamonds. Losing results in subtracting -20 points & -30 diamonds.`,
+          'challenge',
+          '/schedule'
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to accept challenge.");
+    }
+  };
+
   if (loading) return (
     <div className="flex items-center justify-center min-h-[60vh]">
       <Loader2 className="animate-spin text-neon-blue" size={48} />
@@ -732,7 +877,7 @@ const Challenges: React.FC = () => {
                       <h2 className="text-2xl font-black uppercase tracking-tight italic">OUTGOING <span className="text-neon-blue">REQUESTS</span></h2>
                       <div className="flex items-center gap-2 text-[10px] font-black uppercase text-gray-500">
                         <Swords size={12} className="text-neon-blue" />
-                        Match Limit: <span className="text-white">{currentTeam.matchesThisSeason || 0}</span> / {settings?.challengeLimitPerUser || 10} Played
+                        Match Limit: <span className="text-white">{currentTeam.matchesThisSeason || 0}</span> / {settings?.challengeLimitPerUser || 7} Played
                       </div>
                     </div>
                     {userChallenge && isLeader && (
@@ -847,145 +992,7 @@ const Challenges: React.FC = () => {
                           <div className="grid grid-cols-2 gap-3">
                             <button 
                               disabled={!isLeader}
-                              onClick={async () => {
-                                try {
-                                  if (!currentTeam || !fromTeam) return;
-
-                                  // Rule: Active Season Check for acceptance
-                                  const activeSeasonId = settings?.currentSeasonId;
-                                  if (!activeSeasonId) {
-                                    toast.error("No active season is currently set.");
-                                    return;
-                                  }
-                                  if (currentTeam.seasonId !== activeSeasonId || fromTeam.seasonId !== activeSeasonId) {
-                                    toast.error("Both guilds must be in the active season to participate.");
-                                    return;
-                                  }
-
-                                  // Count confirmed challenge matches for this season
-                                  const limit = settings?.challengeLimitPerUser || 10;
-                                  
-                                  const getMatchCount = async (teamId: string) => {
-                                    const q1 = query(collection(db, 'schedules'), 
-                                      where('team1Id', '==', teamId), 
-                                      where('matchType', '==', 'challenge'),
-                                      where('status', '!=', 'cancelled')
-                                    );
-                                    const q2 = query(collection(db, 'schedules'), 
-                                      where('team2Id', '==', teamId), 
-                                      where('matchType', '==', 'challenge'),
-                                      where('status', '!=', 'cancelled')
-                                    );
-                                    const [s1, s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
-                                    return s1.size + s2.size;
-                                  };
-
-                                  const [currentMatches, challengerMatches] = await Promise.all([
-                                    getMatchCount(currentTeam.id),
-                                    getMatchCount(fromTeam.id)
-                                  ]);
-
-                                  if (currentMatches >= limit) {
-                                    toast.error("Limit Reached");
-                                    return;
-                                  }
-
-                                  if (challengerMatches >= limit) {
-                                    toast.error("Opponent Limit Reached");
-                                    return;
-                                  }
-
-                                  // Check for existing schedule between these two in this season
-                                  const qPair1 = query(collection(db, 'schedules'),
-                                    where('team1Id', '==', fromTeam.id),
-                                    where('team2Id', '==', currentTeam.id),
-                                    where('matchType', '==', 'challenge'),
-                                    where('status', '!=', 'cancelled')
-                                  );
-                                  const qPair2 = query(collection(db, 'schedules'),
-                                    where('team1Id', '==', currentTeam.id),
-                                    where('team2Id', '==', fromTeam.id),
-                                    where('matchType', '==', 'challenge'),
-                                    where('status', '!=', 'cancelled')
-                                  );
-                                  const [pairSnap1, pairSnap2] = await Promise.all([getDocs(qPair1), getDocs(qPair2)]);
-
-                                  if (!pairSnap1.empty || !pairSnap2.empty) {
-                                    toast.error("You have already played or have a scheduled challenge against this team this season.");
-                                    return;
-                                  }
-
-                                  // Create an official schedule entry
-                                  const details = c.challengeDetails?.[currentTeam.id];
-
-                                  const batch = writeBatch(db);
-                                  
-                                  // 1. Create the schedule entry
-                                  const scheduleRef = doc(collection(db, 'schedules'));
-                                  const betValue = Number(details?.bet || 0);
-                                  batch.set(scheduleRef, {
-                                    team1Id: c.fromTeamId,
-                                    team1Name: fromTeam.teamName || 'Unknown',
-                                    team2Id: currentTeam.id,
-                                    team2Name: currentTeam.teamName,
-                                    date: details?.date || new Date().toISOString().split('T')[0],
-                                    time: details?.time || "20:00",
-                                    matchType: 'challenge',
-                                    status: 'upcoming',
-                                    bet: betValue,
-                                    firstPick: details?.sideSelection || '1st',
-                                    teamSwitch: details?.teamSwitch || false,
-                                    createdAt: serverTimestamp()
-                                  });
-
-                                  // 2. Increment season match counts
-                                  batch.update(doc(db, 'teams', c.fromTeamId), {
-                                    matchesThisSeason: (fromTeam.matchesThisSeason || 0) + 1
-                                  });
-                                  batch.update(doc(db, 'teams', currentTeam.id), {
-                                    matchesThisSeason: (currentTeam.matchesThisSeason || 0) + 1
-                                  });
-
-                                  // 3. Remove the challenge target/document
-                                  const fromChallengeRef = doc(db, 'challenges', c.fromTeamId);
-                                  const newTargets = (c.targetTeamIds || []).filter(id => id !== currentTeam.id);
-                                  if (newTargets.length === 0) {
-                                    batch.delete(fromChallengeRef);
-                                  } else {
-                                    const newDetails = { ...c.challengeDetails };
-                                    delete newDetails[currentTeam.id];
-                                    batch.update(fromChallengeRef, {
-                                      targetTeamIds: newTargets,
-                                      challengeDetails: newDetails
-                                    });
-                                  }
-
-                                  await batch.commit();
-                                  
-                                  const betAmount = details?.bet || '0';
-                                  toast.success(
-                                    `CHALLENGE ACCEPTED! Match added to schedule.\n\n` +
-                                    `📢 Winning will result in receiving +50 points and +20 diamonds.\n` +
-                                    `📢 Losing will result in subtracting -20 points and -30 diamonds.`,
-                                    { duration: 8000, icon: '⚔️' }
-                                  );
-
-                                  // Notify challenger with winning/losing terms as requested
-                                  if (fromTeam?.ownerId) {
-                                    await createNotification(
-                                      fromTeam.ownerId,
-                                      'Challenge Accepted!',
-                                      `${currentTeam.teamName} has accepted your challenge! Match added to schedule. ` +
-                                      `Winning results in receiving +50 points & +20 diamonds. Losing results in subtracting -20 points & -30 diamonds.`,
-                                      'challenge',
-                                      '/schedule'
-                                    );
-                                  }
-                                } catch (err) {
-                                  console.error(err);
-                                  toast.error("Failed to accept challenge.");
-                                }
-                              }}
+                              onClick={() => setAcceptModalData({ c, fromTeam })}
                               className={`w-full py-3 ${isLeader ? 'bg-neon-green text-black' : 'bg-white/5 text-gray-500'} font-black text-[10px] uppercase tracking-widest rounded-lg hover:brightness-110 shadow-[0_0_20px_rgba(0,255,102,0.3)] transition-all flex items-center justify-center gap-2`}
                             >
                               <CheckCircle2 size={14} />
@@ -1290,6 +1297,81 @@ const Challenges: React.FC = () => {
                 </p>
               </div>
             )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Accept Challenge Modal */}
+      <AnimatePresence>
+        {acceptModalData && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="glass-card max-w-md w-full p-6 space-y-6"
+            >
+               <h2 className="text-xl font-black uppercase text-neon-blue">Accept Challenge</h2>
+               <p className="text-gray-400 text-xs uppercase tracking-widest font-bold">
+                   You are about to accept the challenge from <span className="text-white">{acceptModalData.fromTeam.teamName}</span>.
+               </p>
+               
+               <div className="space-y-4 max-h-[40vh] overflow-y-auto custom-scrollbar pr-2">
+                   {/* Your Team Roster */}
+                   <div className="space-y-2">
+                       <h3 className="text-[10px] uppercase font-black tracking-widest text-gray-500">
+                           Your Team Roster (Max 7 Slots)
+                       </h3>
+                       <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-1">
+                           {Array.from({ length: 7 }).map((_, i) => (
+                               <div key={i} className="flex justify-between items-center text-[10px] font-bold p-1.5 bg-black/40 rounded border border-white/5">
+                                   <span className="text-gray-500">Slot {i + 1}</span>
+                                   <span className={currentTeam?.players?.[i] ? "text-neon-cyan" : "text-gray-600"}>
+                                       {currentTeam?.players?.[i] || 'Empty'}
+                                   </span>
+                               </div>
+                           ))}
+                       </div>
+                   </div>
+
+                   {/* Opponent Team Roster */}
+                   <div className="space-y-2">
+                       <h3 className="text-[10px] uppercase font-black tracking-widest text-gray-500">
+                           {acceptModalData.fromTeam.teamName} Roster
+                       </h3>
+                       <div className="bg-neon-red/5 border border-neon-red/10 rounded-xl p-3 space-y-1">
+                           {Array.from({ length: 7 }).map((_, i) => (
+                               <div key={i} className="flex justify-between items-center text-[10px] font-bold p-1.5 bg-black/40 rounded border border-white/5">
+                                   <span className="text-gray-500">Slot {i + 1}</span>
+                                   <span className={acceptModalData.fromTeam.players?.[i] ? "text-neon-red" : "text-gray-600"}>
+                                       {acceptModalData.fromTeam.players?.[i] || 'Empty'}
+                                   </span>
+                               </div>
+                           ))}
+                       </div>
+                   </div>
+               </div>
+               
+               <div className="flex gap-3 pt-4">
+                  <button 
+                      onClick={() => setAcceptModalData(null)}
+                      className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl font-black uppercase tracking-widest text-xs transition-colors"
+                  >
+                      Cancel
+                  </button>
+                  <button 
+                      onClick={() => executeAccept(acceptModalData.c, acceptModalData.fromTeam)}
+                      className="flex-1 py-3 bg-neon-blue text-black hover:bg-white rounded-xl font-black uppercase tracking-widest text-xs shadow-[0_0_15px_rgba(0,229,255,0.3)] transition-all"
+                  >
+                      Confirm Accept
+                  </button>
+               </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

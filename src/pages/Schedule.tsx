@@ -85,7 +85,7 @@ const Schedule: React.FC = () => {
   }, []);
 
   const liveHighlights = useMemo(() => {
-    const highlights: { teams: [Team, Team], time: string, date: string, bet: string, firstPickTeamId: string, firstPickName?: string, isChallenge?: boolean, status: string }[] = [];
+    const highlights: { teams: [Team, Team], time: string, date: string, bet: string, firstPickTeamId: string, firstPickName?: string, isChallenge?: boolean, status: string, externalLink?: string }[] = [];
     const processed = new Set<string>();
 
     // 1. Mutual Challenges
@@ -147,7 +147,8 @@ const Schedule: React.FC = () => {
         firstPickTeamId: s.firstPick === s.team1Name ? s.team1Id || s.team1Name : s.firstPick === s.team2Name ? s.team2Id || s.team2Name : s.firstPick,
         firstPickName: s.firstPick,
         isChallenge: s.matchType === 'challenge',
-        status: s.status
+        status: s.status,
+        externalLink: s.streamUrl || s.matchDetails?.externalLink
       });
     });
 
@@ -402,6 +403,18 @@ const Schedule: React.FC = () => {
                           <span className="text-[10px] font-black text-neon-cyan">{match.bet} DIA</span>
                         </div>
                       )}
+
+                      {match.externalLink && (
+                        <a 
+                          href={match.externalLink} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="px-3 py-1 bg-neon-blue/20 rounded-full border border-neon-blue/50 flex items-center gap-1.5 hover:bg-neon-blue hover:text-black transition-all group/link"
+                        >
+                          <ExternalLink size={12} className="text-neon-blue group-hover/link:text-black" />
+                          <span className="text-[10px] font-black uppercase text-neon-blue group-hover/link:text-black">LIVE LINK</span>
+                        </a>
+                      )}
                     </div>
                   </div>
 
@@ -449,6 +462,15 @@ const Schedule: React.FC = () => {
               {tab === 'results' && 'RESULTS'}
             </button>
           ))}
+          
+          {activeTab === 'results' && (
+            <Link 
+              to="/results" 
+              className="px-6 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest bg-neon-blue/10 text-neon-blue border border-neon-blue/20 hover:bg-neon-blue hover:text-black transition-all ml-2"
+            >
+              FULL ARCHIVE <ArrowRight size={14} className="inline ml-1" />
+            </Link>
+          )}
         </div>
 
         <div className="relative w-full lg:w-96 group">
@@ -581,6 +603,16 @@ const Schedule: React.FC = () => {
                         >
                           <Trash2 size={16} />
                         </button>
+                      )}
+                      {(match.streamUrl || match.matchDetails?.externalLink) && (
+                        <a 
+                          href={match.streamUrl || match.matchDetails?.externalLink} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-neon-blue/10 border border-neon-blue/20 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-neon-blue hover:text-black transition-all text-neon-blue shadow-[0_0_10px_rgba(0,229,255,0.1)]"
+                        >
+                          {match.status === 'completed' ? 'RECORD' : 'LIVE'} <ExternalLink size={14} />
+                        </a>
                       )}
                       <Link 
                         to={`/schedule/${match.id}`}

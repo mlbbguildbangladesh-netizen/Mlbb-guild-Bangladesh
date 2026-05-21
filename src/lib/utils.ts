@@ -285,19 +285,45 @@ export const formatLink = (url?: string) => {
 
 export const openExternalLink = (e: any, url?: string) => {
   if (e) {
-    e.preventDefault();
-    e.stopPropagation();
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+    if (typeof e.stopPropagation === 'function') e.stopPropagation();
   }
   
   if (!url) return;
   const formatted = formatLink(url);
 
-  // Check if we are in an Android WebView environment
   const isAndroid = /Android/i.test(navigator.userAgent);
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   
   if (isAndroid) {
-    // For Discord, use intent URI to force open the app if installed, 
-    // avoiding the website's automatic redirect to Play Store inside WebViews.
+    // Facebook Deep Linking for Android
+    if (formatted.includes('facebook.com')) {
+      try {
+        const urlObj = new URL(formatted);
+        const path = urlObj.pathname + urlObj.search;
+        // Generic intent that allows choice between FB, FB Lite, or Browser
+        const intentUrl = `intent://${urlObj.host}${path}#Intent;scheme=https;S.browser_fallback_url=${encodeURIComponent(formatted)};end;`;
+        window.location.href = intentUrl;
+        return;
+      } catch (err) {
+        // Fallback
+      }
+    }
+
+    // WhatsApp Deep Linking for Android
+    if (formatted.includes('wa.me/') || formatted.includes('whatsapp.com')) {
+      try {
+        // wa.me URL is usually enough, but intent can force app selection screen
+        const urlObj = new URL(formatted);
+        const intentUrl = `intent://${urlObj.host}${urlObj.pathname}${urlObj.search}#Intent;scheme=https;package=com.whatsapp;S.browser_fallback_url=${encodeURIComponent(formatted)};end;`;
+        window.location.href = intentUrl;
+        return;
+      } catch (err) {
+        // Fallback
+      }
+    }
+
+    // Discord handling
     if (formatted.includes('discord.gg') || formatted.includes('discord.com')) {
       try {
         const urlObj = new URL(formatted);
@@ -305,11 +331,11 @@ export const openExternalLink = (e: any, url?: string) => {
         window.location.href = intentUrl;
         return;
       } catch (err) {
-        // Fallback to normal behavior if URL parsing fails
+        // Fallback
       }
     }
 
-    // Standard window.open with _system is the best 'breakout' for most APK wrappers.
+    // Default Android behavior
     try {
       const win = window.open(formatted, '_system');
       if (!win) {
@@ -318,6 +344,9 @@ export const openExternalLink = (e: any, url?: string) => {
     } catch (err) {
       window.location.href = formatted;
     }
+  } else if (isIOS) {
+    // iOS handling - standard URLs usually trigger "Open in App" banners naturally
+    window.location.href = formatted;
   } else {
     // Standard desktop/mobile browser
     window.open(formatted, '_blank', 'noopener,noreferrer');

@@ -268,7 +268,8 @@ export default function SchedulesAdmin() {
           diamondsExchanged: { 
             team1: results.diamondsExchanged.teamA, 
             team2: results.diamondsExchanged.teamB 
-          }
+          },
+          externalLink: reportData.externalLink
         }
       });
 
@@ -635,7 +636,16 @@ export default function SchedulesAdmin() {
               {newMatch.team2Name && <option value={newMatch.team2Name}>{newMatch.team2Name}</option>}
             </select>
           </div>
-          <div className="md:col-span-4 flex items-end">
+          <div className="col-span-1 md:col-span-2">
+            <input 
+              type="url" 
+              placeholder="Stream/Match URL (https://...)" 
+              className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-sm"
+              value={newMatch.streamUrl || ''}
+              onChange={e => setNewMatch({...newMatch, streamUrl: e.target.value})}
+            />
+          </div>
+          <div className="md:col-span-6 flex items-end">
             <button type="submit" className="bg-neon-blue text-black font-black uppercase px-6 py-2 rounded-lg hover:bg-white transition-colors w-full sm:w-auto">
               Add Schedule
             </button>
@@ -738,6 +748,16 @@ export default function SchedulesAdmin() {
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] text-gray-500 uppercase font-black">Stream / Record URL</label>
+              <input 
+                type="url" 
+                className="w-full bg-black/50 border border-white/10 rounded p-2 text-xs" 
+                value={editMatch.streamUrl || ''} 
+                onChange={e => setEditMatch({...editMatch, streamUrl: e.target.value})} 
+                placeholder="https://..."
+              />
             </div>
             <div className="flex justify-end gap-2 mt-2">
                <button onClick={() => setEditingId(null)} className="text-gray-500 hover:text-white p-1"><X size={16}/></button>
@@ -869,7 +889,7 @@ export default function SchedulesAdmin() {
                       setReportData({ 
                         winnerId: s.matchDetails?.winnerId || '', 
                         type: s.matchDetails?.resultType || 'win', 
-                        externalLink: '', 
+                        externalLink: s.matchDetails?.externalLink || '', 
                         pointsA: s.matchDetails?.pointsExchanged?.team1 || 0, 
                         pointsB: s.matchDetails?.pointsExchanged?.team2 || 0, 
                         diamondsA: s.matchDetails?.diamondsExchanged?.team1 || 0, 

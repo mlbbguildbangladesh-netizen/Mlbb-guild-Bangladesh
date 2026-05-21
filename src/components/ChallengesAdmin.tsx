@@ -121,7 +121,7 @@ export default function ChallengesAdmin() {
     }
 
     // Count confirmed challenge matches for this season
-    const limit = settings?.challengeLimitPerUser || 10;
+    const limit = settings?.challengeLimitPerUser || 7;
     
     const getMatchCount = async (teamId: string) => {
       const q1 = query(collection(db, 'schedules'), 

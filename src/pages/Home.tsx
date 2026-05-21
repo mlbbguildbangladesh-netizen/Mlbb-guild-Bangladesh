@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { Trophy, Shield, Zap, Youtube, Facebook, ArrowRight, Calendar, Clock, Users, Timer, Swords, Sword, UserPlus, MessageCircle, TrendingUp } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Trophy, Shield, Zap, Youtube, Facebook, ArrowRight, Calendar, Clock, Users, Timer, Swords, Sword, UserPlus, MessageCircle, TrendingUp, Book, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
@@ -19,6 +20,7 @@ const Home: React.FC = () => {
   const [liveLinks, setLiveLinks] = useState<LiveLink[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showRulesModal, setShowRulesModal] = useState(false);
 
   useEffect(() => {
     // We can just stop loading immediately or after a short delay so the user isn't stuck.
@@ -252,6 +254,23 @@ const Home: React.FC = () => {
 
   return (
     <div className="space-y-12 md:space-y-24 py-6 md:py-10">
+      
+      {/* Main Rules Trigger */}
+      <div className="flex justify-center -mt-2 relative z-30 px-4">
+        <button
+          onClick={() => setShowRulesModal(true)}
+          className="group flex items-center justify-center gap-3 p-3 sm:px-6 bg-black/60 border border-neon-purple/50 rounded-2xl hover:bg-neon-purple/20 transition-all duration-300 shadow-[0_0_20px_rgba(157,78,221,0.2)] hover:shadow-[0_0_30px_rgba(157,78,221,0.4)] backdrop-blur-md"
+        >
+          <Book size={24} className="text-neon-purple group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-500" />
+          <div className="flex flex-col items-start text-left">
+            <span className="text-white font-black tracking-widest uppercase text-xs group-hover:text-neon-purple transition-colors">
+              Community Rules
+            </span>
+            <span className="text-gray-400 text-[8px] font-bold uppercase tracking-wider">Tap to View</span>
+          </div>
+        </button>
+      </div>
+
       {/* Hero Section */}
       {settings?.showHeroSection !== false && (
         <section className="relative min-h-[60vh] md:min-h-[70vh] py-16 md:py-24 flex items-center justify-center text-center overflow-hidden rounded-3xl">
@@ -613,6 +632,47 @@ const Home: React.FC = () => {
         </div>
       </section>
       )}
+
+      {/* Rules Modal */}
+      {createPortal(
+        <AnimatePresence>
+          {showRulesModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-black/90 border border-neon-purple/30 rounded-2xl w-full max-w-2xl overflow-hidden shadow-[0_0_50px_rgba(157,78,221,0.2)] flex flex-col max-h-[90vh]"
+              >
+                <div className="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
+                  <h2 className="text-xl font-black uppercase tracking-widest flex items-center gap-2 text-neon-purple">
+                     <Book size={20} /> Community Rules
+                  </h2>
+                  <button 
+                    onClick={() => setShowRulesModal(false)}
+                    className="p-2 hover:bg-white/10 rounded-full transition-colors text-gray-400 hover:text-white"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+                <div className="p-6 overflow-y-auto custom-scrollbar">
+                  {settings?.communityRules ? (
+                    <div className="prose prose-invert prose-p:text-gray-300 prose-headings:text-white prose-a:text-neon-blue max-w-none whitespace-pre-wrap font-mono text-sm leading-relaxed tracking-wide">
+                      {settings.communityRules}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-gray-500 font-mono text-sm">
+                      No community rules have been established yet.
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
     </div>
   );
 };
