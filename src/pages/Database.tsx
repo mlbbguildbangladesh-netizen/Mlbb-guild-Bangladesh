@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Table, EyeOff, Moon, Sun, Edit3, X, Search, Trophy, Gem, Save } from 'lucide-react';
+import { Table, EyeOff, Moon, Sun, Edit3, X, Search, Trophy, Gem, Save, Swords } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GoogleSheetConfig, Team } from '../types';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
@@ -14,7 +14,7 @@ const Database = () => {
   const canEditLeaderboard = isAdmin || (isModerator && moderatorPermissions?.includes('teams'));
   const [showEditPanel, setShowEditPanel] = useState(false);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [editValues, setEditValues] = useState<Record<string, { points: number, diamonds: number }>>({});
+  const [editValues, setEditValues] = useState<Record<string, { points: number, diamonds: number, matchesThisSeason: number }>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
 
@@ -33,7 +33,11 @@ const Database = () => {
           const next = { ...prev };
           loadedTeams.forEach(t => {
             if (!next[t.id]) {
-              next[t.id] = { points: Number(t.points) || 0, diamonds: Number(t.diamonds) || 0 };
+              next[t.id] = { 
+                points: Number(t.points) || 0, 
+                diamonds: Number(t.diamonds) || 0,
+                matchesThisSeason: Number(t.matchesThisSeason) || 0 
+              };
             }
           });
           return next;
@@ -179,7 +183,7 @@ const Database = () => {
     const values = editValues[teamId];
     if (!team || !values) return;
     
-    if (values.points === Number(team.points) && values.diamonds === Number(team.diamonds)) {
+    if (values.points === Number(team.points) && values.diamonds === Number(team.diamonds) && values.matchesThisSeason === Number(team.matchesThisSeason || 0)) {
       toast('No changes detected', { icon: 'ℹ️', style: { borderRadius: '10px', background: '#333', color: '#fff' } });
       return;
     }
@@ -189,7 +193,8 @@ const Database = () => {
       const teamRef = doc(db, 'teams', team.id);
       await updateDoc(teamRef, {
         points: values.points,
-        diamonds: values.diamonds
+        diamonds: values.diamonds,
+        matchesThisSeason: values.matchesThisSeason
       });
       
       const pointDelta = values.points - Number(team.points || 0);
@@ -396,14 +401,14 @@ const Database = () => {
                       <p className="font-bold text-white text-sm truncate pr-2 max-w-[200px]" title={team.teamName}>{team.teamName}</p>
                       <button 
                         onClick={() => handleSaveTeam(team.id)}
-                        disabled={savingId === team.id || (editValues[team.id]?.points === Number(team.points) && editValues[team.id]?.diamonds === Number(team.diamonds))}
+                        disabled={savingId === team.id || (editValues[team.id]?.points === Number(team.points) && editValues[team.id]?.diamonds === Number(team.diamonds) && editValues[team.id]?.matchesThisSeason === Number(team.matchesThisSeason || 0))}
                         className="px-3 py-1.5 bg-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/30 rounded text-[10px] font-black tracking-widest uppercase transition-all disabled:opacity-50 disabled:grayscale flex items-center gap-1.5"
                       >
                         {savingId === team.id ? 'SAVING...' : <><Save size={12} /> SAVE</>}
                       </button>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1">
                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 flex items-center gap-1">
                           <Trophy size={10} className="text-neon-blue" /> Pts <span className="text-gray-600 font-mono ml-auto">({team.points || 0})</span>
@@ -413,7 +418,7 @@ const Database = () => {
                             type="number"
                             value={editValues[team.id]?.points ?? 0}
                             onChange={(e) => setEditValues(prev => ({ ...prev, [team.id]: { ...prev[team.id], points: Number(e.target.value) } }))}
-                            className="w-full bg-transparent p-2 text-sm focus:border-neon-blue outline-none font-mono text-center appearance-none"
+                            className="w-full bg-transparent p-2 text-xs focus:border-neon-blue outline-none font-mono text-center appearance-none"
                           />
                         </div>
                       </div>
@@ -426,7 +431,20 @@ const Database = () => {
                             type="number"
                             value={editValues[team.id]?.diamonds ?? 0}
                             onChange={(e) => setEditValues(prev => ({ ...prev, [team.id]: { ...prev[team.id], diamonds: Number(e.target.value) } }))}
-                            className="w-full bg-transparent p-2 text-sm focus:border-neon-cyan outline-none font-mono text-center appearance-none"
+                            className="w-full bg-transparent p-2 text-xs focus:border-neon-cyan outline-none font-mono text-center appearance-none"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 flex items-center gap-1">
+                          <Swords size={10} className="text-neon-purple" /> Mtchs <span className="text-gray-600 font-mono ml-auto">({team.matchesThisSeason || 0})</span>
+                        </label>
+                        <div className="flex bg-black/50 border border-white/10 rounded-lg overflow-hidden">
+                          <input 
+                            type="number"
+                            value={editValues[team.id]?.matchesThisSeason ?? 0}
+                            onChange={(e) => setEditValues(prev => ({ ...prev, [team.id]: { ...prev[team.id], matchesThisSeason: Number(e.target.value) } }))}
+                            className="w-full bg-transparent p-2 text-xs focus:border-neon-purple outline-none font-mono text-center appearance-none"
                           />
                         </div>
                       </div>

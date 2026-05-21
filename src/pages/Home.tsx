@@ -277,7 +277,23 @@ const Home: React.FC = () => {
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-10" />
           <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=2070')] bg-cover bg-center opacity-40 scale-110 hover:scale-100 transition-transform duration-1000" />
           
-          <div className="relative z-20 max-w-4xl px-6 space-y-4 md:space-y-6">
+          {teams.filter(t => t.logoUrl).length > 0 && (
+            <div className="absolute top-4 left-0 right-0 z-[15] w-full overflow-hidden mask-edges">
+               <div className="flex w-max animate-logo-scroll gap-4 sm:gap-6 px-2">
+                 {[...Array(6)].flatMap(() => teams.filter(t => t.logoUrl)).map((team, idx) => (
+                   <div key={`${team.id}-${idx}`} title={team.teamName} className="flex-none flex items-center justify-center opacity-60 hover:opacity-100 hover:scale-110 transition-all duration-300">
+                     <ImageWithFallback
+                       src={team.logoUrl}
+                       alt={team.teamName}
+                       className="w-12 h-12 md:w-16 md:h-16 rounded-full border border-white/20 object-contain bg-black/80 shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+                     />
+                   </div>
+                 ))}
+               </div>
+            </div>
+          )}
+
+          <div className="relative z-20 max-w-4xl px-6 space-y-4 md:space-y-6 pt-16 mt-8">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}

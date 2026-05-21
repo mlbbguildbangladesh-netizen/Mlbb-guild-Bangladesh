@@ -126,7 +126,20 @@ export default function SoloPlayers() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const userSoloProfile = useMemo(() => players.find(p => p.userId === user?.id), [players, user]);
+  const computedPlayers = useMemo(() => {
+    return players.map(p => {
+      const isBookedInAnyTeam = teams.some(t => t.registrationStatus === 'approved' && t.players && t.players.includes(p.gameId));
+      return {
+        ...p,
+        status: isBookedInAnyTeam ? 'booked' : p.status
+      };
+    });
+  }, [players, teams]);
+
+  const userSoloProfile = useMemo(() => computedPlayers.find(p => p.userId === user?.id), [computedPlayers, user]);
+  const isUserBookedInTeam = useMemo(() => {
+    return userSoloProfile ? teams.some(t => t.registrationStatus === 'approved' && t.players && t.players.includes(userSoloProfile.gameId)) : false;
+  }, [userSoloProfile, teams]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -228,8 +241,12 @@ export default function SoloPlayers() {
 
   const toggleStatus = async () => {
     if (!userSoloProfile) return;
+    if (isUserBookedInTeam) {
+      toast.error('You are currently booked because you are in a team roster.', { style: { borderRadius: '10px', background: '#333', color: '#fff' } });
+      return;
+    }
     try {
-      const newStatus = userSoloProfile.status === 'booked' ? 'active' : 'booked';
+      const newStatus = players.find(p => p.userId === user?.id)?.status === 'booked' ? 'active' : 'booked';
       await updateDoc(doc(db, 'soloPlayers', userSoloProfile.id), { status: newStatus });
       toast.success(`Status updated to ${newStatus.toUpperCase()}`);
     } catch (err) {
@@ -466,9 +483,9 @@ export default function SoloPlayers() {
   };
 
   const filteredPlayers = useMemo(() => {
-    let list = players;
+    let list = computedPlayers;
     if (activeTab === 'hire') {
-      list = players.filter(p => p.status !== 'booked');
+      list = computedPlayers.filter(p => p.status !== 'booked');
     }
     return list.filter(p => {
       const canView = canRecruit || p.userId === user?.id;
@@ -602,9 +619,10 @@ export default function SoloPlayers() {
                     userSoloProfile.status === 'booked' 
                       ? 'bg-neon-red/20 text-neon-red border border-neon-red/30 hover:bg-neon-red/30' 
                       : 'bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30'
-                  }`}
+                  } ${isUserBookedInTeam ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  title={isUserBookedInTeam ? 'You are currently in a team roster' : ''}
                 >
-                  {userSoloProfile.status === 'booked' ? 'STATUS: BOOKED (HIDDEN)' : 'STATUS: ACTIVE (VISIBLE)'}
+                  {isUserBookedInTeam ? 'STATUS: BOOKED (IN TEAM)' : (userSoloProfile.status === 'booked' ? 'STATUS: BOOKED (HIDDEN)' : 'STATUS: ACTIVE (VISIBLE)')}
                 </button>
               </div>
             ) : !user ? (

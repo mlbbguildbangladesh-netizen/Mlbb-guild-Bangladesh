@@ -44,13 +44,13 @@
     @apply text-transparent;
   }
 
-  .animate-marquee {
-    animation: marquee 20s linear infinite;
+  .animate-logo-scroll {
+    animation: scroll 30s linear infinite;
   }
 
-  @keyframes marquee {
+  @keyframes scroll {
     0% { transform: translateX(0); }
-    100% { transform: translateX(-33.33%); }
+    100% { transform: translateX(-50%); }
   }
 }
 
@@ -103,5 +103,10 @@
   }
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+  
+  .mask-edges {
+    mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
   }
 }
