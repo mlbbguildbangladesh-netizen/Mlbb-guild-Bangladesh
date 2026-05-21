@@ -49,6 +49,8 @@ export interface Team {
   uniqueId: string;
   createdAt: string;
   matchesThisSeason?: number;
+  matches?: string[];
+  matchesCount?: number;
   lastDiamondPurchase?: any;
   gameId?: string;
   serverId?: string;

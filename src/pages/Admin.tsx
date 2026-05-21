@@ -1134,6 +1134,7 @@ const Admin: React.FC = () => {
   };
 
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
+  const [showAllMatchesForTeamEdit, setShowAllMatchesForTeamEdit] = useState(false);
   const [manualErrorFields, setManualErrorFields] = useState<number[]>([]);
   const [editingErrorFields, setEditingErrorFields] = useState<number[]>([]);
   const [manualErrorMap, setManualErrorMap] = useState<Record<number, string>>({});
@@ -1712,7 +1713,9 @@ const Admin: React.FC = () => {
         phoneNumber: editingTeam.phoneNumber || '',
         seasonId: editingTeam.seasonId || '',
         players: players,
-        customData: editingTeam.customData || {}
+        customData: editingTeam.customData || {},
+        matches: editingTeam.matches || [],
+        matchesCount: Number(editingTeam.matchesCount || 0)
       });
 
       // Log transaction if points or diamonds changed
@@ -5209,6 +5212,127 @@ Supports multiple lines."
                     onChange={e => setEditingTeam({...editingTeam, phoneNumber: e.target.value})}
                     placeholder="WhatsApp/Phone Number"
                   />
+                </div>
+
+                <div className="space-y-4 pt-4 border-t border-white/5">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-neon-blue flex items-center gap-1.5">
+                      <Swords size={12} /> Matches Selection & Stats
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowAllMatchesForTeamEdit(!showAllMatchesForTeamEdit)}
+                      className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase transition-all border ${
+                        showAllMatchesForTeamEdit 
+                          ? 'bg-neon-blue/20 text-neon-blue border-neon-blue/50' 
+                          : 'bg-white/5 text-gray-400 border-white/10 hover:border-white/25'
+                      }`}
+                    >
+                      {showAllMatchesForTeamEdit ? "Show Related Matches Only" : "Show All System Matches"}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 bg-black/40 border border-white/5 p-3 rounded-xl">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-gray-500 uppercase">Matches Played (Count)</label>
+                      <input 
+                        type="number"
+                        min="0"
+                        className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-xs font-mono text-white"
+                        value={editingTeam.matchesCount || 0}
+                        onChange={e => setEditingTeam({...editingTeam, matchesCount: Number(e.target.value)})}
+                        placeholder="e.g. 5"
+                      />
+                    </div>
+                    <div className="space-y-1 flex flex-col justify-end">
+                      <span className="text-[8px] text-gray-400 font-bold uppercase block leading-normal">
+                        Matches played by this team. Ticking checkbox items below will automatically increment/update this count.
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 text-[9px] font-black uppercase text-gray-400">
+                      <span>Match Schedule Checklist</span>
+                      <span className="text-neon-cyan">{(editingTeam.matches || []).length} Selected</span>
+                    </div>
+                    {allSchedules.length === 0 ? (
+                      <p className="text-[9px] text-gray-500 italic uppercase py-3 text-center">No schedule records in system.</p>
+                    ) : (
+                      (() => {
+                        const filteredMatches = allSchedules.filter(m => 
+                          showAllMatchesForTeamEdit || 
+                          m.team1Id === editingTeam.id || 
+                          m.team2Id === editingTeam.id ||
+                          m.team1Name?.toLowerCase().includes(editingTeam.teamName.toLowerCase()) ||
+                          m.team2Name?.toLowerCase().includes(editingTeam.teamName.toLowerCase())
+                        );
+
+                        if (filteredMatches.length === 0) {
+                          return (
+                            <div className="text-center py-4 border border-dashed border-white/10 rounded-lg bg-black/25">
+                              <p className="text-[9px] text-gray-500 uppercase font-black">No related matches found in schedules.</p>
+                              <button
+                                type="button"
+                                onClick={() => setShowAllMatchesForTeamEdit(true)}
+                                className="mt-1 text-[8px] text-neon-blue uppercase font-bold hover:underline"
+                              >
+                                Click here to show all system matches
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="space-y-1 max-h-[180px] overflow-y-auto border border-white/10 bg-black/60 rounded-xl p-2.5 custom-scrollbar">
+                            {filteredMatches.map(m => {
+                              const isSelected = (editingTeam.matches || []).includes(m.id);
+                              return (
+                                <label 
+                                  key={m.id} 
+                                  className={`flex items-start gap-2.5 p-2 rounded-lg cursor-pointer transition-all border ${
+                                    isSelected 
+                                      ? 'bg-neon-purple/10 border-neon-purple/40 text-white' 
+                                      : 'bg-white/5 border-transparent text-gray-400 hover:bg-white/10 hover:border-white/5'
+                                  }`}
+                                >
+                                  <input 
+                                    type="checkbox"
+                                    className="mt-0.5 rounded border-gray-700 bg-black text-neon-purple focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                                    checked={isSelected}
+                                    onChange={() => {
+                                      const currentList = editingTeam.matches || [];
+                                      const newList = isSelected 
+                                        ? currentList.filter(id => id !== m.id)
+                                        : [...currentList, m.id];
+                                      setEditingTeam({
+                                        ...editingTeam,
+                                        matches: newList,
+                                        matchesCount: newList.length
+                                      });
+                                    }}
+                                  />
+                                  <div className="flex flex-col text-left">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-[10px] font-black uppercase tracking-tight text-white">
+                                        {m.team1Name} <span className="text-neon-purple font-bold">vs</span> {m.team2Name}
+                                      </span>
+                                      {m.status === 'completed' && (
+                                        <span className="text-[7px] bg-neon-green/10 text-neon-green border border-neon-green/30 px-1 rounded uppercase font-bold">Played</span>
+                                      )}
+                                    </div>
+                                    <span className="text-[8.5px] font-mono text-gray-500 font-bold uppercase leading-normal">
+                                      {m.date} {m.time} • Type: {m.matchType || 'scrimmage'} • Match ID: {m.id.substring(0,6)}...
+                                    </span>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-4 pt-4 border-t border-white/5">

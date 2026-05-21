@@ -5,9 +5,10 @@ import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { Team } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Diamond, Zap, TrendingUp, Search, Filter, ArrowDownWideNarrow, ArrowUpNarrowWide, Sword } from 'lucide-react';
+import { Trophy, Diamond, Zap, TrendingUp, Search, Filter, ArrowDownWideNarrow, ArrowUpNarrowWide, Sword, ChevronRight } from 'lucide-react';
 import { FALLBACK_IMAGE, RANKS } from '../lib/utils';
 import { ImageWithFallback } from '../components/ImageWithFallback';
+import { RankBadge } from '../components/RankBadge';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { handleFirestoreError, OperationType } from '../lib/firebase';
@@ -78,16 +79,36 @@ const Leaderboard: React.FC = () => {
   return (
     <div className="py-6 md:py-10 space-y-8 md:space-y-10">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-1">
-        <div className="space-y-2">
+        <div className="space-y-4 md:space-y-6">
+          <div className="space-y-2">
+            <motion.div 
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex items-center gap-2 text-neon-blue font-bold tracking-widest text-sm"
+            >
+              <Trophy size={16} />
+              LIVE STANDINGS
+            </motion.div>
+            <h1 className="text-4xl sm:text-5xl md:text-7xl font-black italic uppercase tracking-tighter">LEADER<span className="gaming-text-stroke">BOARD</span></h1>
+          </div>
+          
           <motion.div 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-2 text-neon-blue font-bold tracking-widest text-sm"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="flex items-center flex-wrap gap-2 lg:gap-3 bg-white/5 p-3 rounded-xl border border-white/10"
           >
-            <Trophy size={16} />
-            LIVE STANDINGS
+            <span className="text-xs font-black text-gray-500 uppercase tracking-widest mr-2">Rank Tiers:</span>
+            {RANKS.map((r, i) => (
+              <React.Fragment key={r}>
+                <RankBadge rank={r} size="sm" className="hidden md:block" />
+                <RankBadge rank={r} size="sm" className="md:hidden !px-1.5 !text-[8px]" />
+                {i < RANKS.length - 1 && (
+                  <ChevronRight size={14} className="text-gray-600 hidden sm:block" />
+                )}
+              </React.Fragment>
+            ))}
           </motion.div>
-          <h1 className="text-4xl sm:text-5xl md:text-7xl font-black italic uppercase tracking-tighter">LEADER<span className="gaming-text-stroke">BOARD</span></h1>
         </div>
 
         <div className="relative group max-w-sm w-full md:w-auto flex-1">
@@ -191,9 +212,9 @@ const Leaderboard: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-6 text-center">
-                        <span className="px-3 py-1 bg-white/10 border border-white/10 rounded-md text-xs font-black uppercase text-yellow-500 italic">
-                          RANK {team.rank || 'E'}
-                        </span>
+                        <div className="flex justify-center">
+                          <RankBadge rank={team.rank || 'E'} size="md" />
+                        </div>
                       </td>
                       <td className="px-6 py-6 text-center">
                         <div className="flex items-center justify-center gap-2 font-black text-neon-blue text-xl">
@@ -267,8 +288,8 @@ const Leaderboard: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                    <div className="px-2 py-0.5 border border-yellow-500/30 rounded text-[8px] font-black uppercase text-yellow-500 italic bg-yellow-500/10">
-                      RANK {team.rank || 'E'}
+                    <div>
+                      <RankBadge rank={team.rank || 'E'} size="sm" />
                     </div>
                   </div>
 

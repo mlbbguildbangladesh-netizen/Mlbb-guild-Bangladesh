@@ -14,6 +14,7 @@ import { FALLBACK_IMAGE, RANKS, getRankBonus, uploadExternalImageToStorage } fro
 import { useSearchParams, Link } from 'react-router-dom';
 import { Transaction } from '../types';
 import { orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { RankBadge } from '../components/RankBadge';
 
 const Profile: React.FC = () => {
   const { user, isAdmin, isModerator, settings, loading: authLoading } = useAuth();
@@ -1050,7 +1051,9 @@ const Profile: React.FC = () => {
               
               <div className="bg-neon-blue/10 border border-neon-blue/30 rounded-xl p-5 text-center space-y-3">
                 <div className="text-[10px] font-black uppercase tracking-widest text-[#4ade80]">Team Rank</div>
-                <div className="text-5xl font-black italic gaming-text-stroke-sm text-yellow-500">{team?.rank || 'E'}</div>
+                <div className="flex justify-center my-4">
+                  <RankBadge rank={team?.rank || 'E'} size="xl" />
+                </div>
                 <div className="text-[10px] font-bold uppercase text-gray-400">
                   Bonus per win: <span className="text-neon-blue font-black">+{getRankBonus(team?.rank || 'E')} pts/dia</span>
                 </div>
