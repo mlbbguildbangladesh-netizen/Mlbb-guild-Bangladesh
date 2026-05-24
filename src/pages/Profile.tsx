@@ -1054,8 +1054,9 @@ const Profile: React.FC = () => {
                 <div className="flex justify-center my-4">
                   <RankBadge rank={team?.rank || 'E'} size="xl" />
                 </div>
-                <div className="text-[10px] font-bold uppercase text-gray-400">
-                  Bonus per win: <span className="text-neon-blue font-black">+{getRankBonus(team?.rank || 'E')} pts/dia</span>
+                <div className="text-[10px] font-bold uppercase text-gray-400 flex flex-col items-center justify-center gap-1">
+                  <div>Rank Bonus: <span className="text-neon-blue font-black">+{getRankBonus(team?.rank || 'E')} pts/dia</span>/win</div>
+                  <div>Streak Bonus: <span className="text-neon-blue font-black">+{((team?.streak || 0) * 20)} pts</span>/win</div>
                 </div>
                 
                 {targetId === user?.id && RANKS.indexOf(team?.rank || 'E') < RANKS.length - 1 && (

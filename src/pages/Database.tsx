@@ -11,15 +11,16 @@ const Database = () => {
   const { settings, isAdmin, isModerator, moderatorPermissions } = useAuth();
   const [darkMode, setDarkMode] = useState(true);
   
-  const canEditLeaderboard = isAdmin || (isModerator && moderatorPermissions?.includes('teams'));
+  const canEditLeaderboard = isAdmin || (isModerator && (moderatorPermissions?.includes('teams') || moderatorPermissions?.includes('database')));
   const [showEditPanel, setShowEditPanel] = useState(false);
   const [teams, setTeams] = useState<Team[]>([]);
   const [editValues, setEditValues] = useState<Record<string, { points: number, diamonds: number, matchesThisSeason: number }>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
 
-  // Filter sheets: Admins see all, others see only public
-  const availableSheets = settings?.googleSheets?.filter(s => isAdmin || s.isPublic) || [];
+  // Filter sheets: Admins see all, others see only public (unless they have database permission)
+  const canViewAllSheets = isAdmin || (isModerator && moderatorPermissions?.includes('database'));
+  const availableSheets = settings?.googleSheets?.filter(s => canViewAllSheets || s.isPublic) || [];
   
   const [activeSheetId, setActiveSheetId] = useState<string>(availableSheets[0]?.id || '');
 
@@ -244,7 +245,7 @@ const Database = () => {
           No Database Records Available
         </h2>
         <p className="text-gray-600 mt-2 text-sm text-center">
-          {isAdmin ? 'You can add Google Sheets in the Admin Panel -> Config.' : 'The administrator has not made any records public yet.'}
+          {canViewAllSheets ? 'You can add Google Sheets in the Admin Panel -> Config.' : 'The administrator has not made any records public yet.'}
         </p>
       </div>
     );

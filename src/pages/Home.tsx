@@ -253,7 +253,7 @@ const Home: React.FC = () => {
   }
 
   return (
-    <div className="space-y-12 md:space-y-24 py-6 md:py-10">
+    <div className="space-y-8 md:space-y-16 py-4 md:py-6">
       
       {/* Main Rules Trigger */}
       <div className="flex justify-center -mt-2 relative z-30 px-4">
@@ -273,7 +273,7 @@ const Home: React.FC = () => {
 
       {/* Hero Section */}
       {settings?.showHeroSection !== false && (
-        <section className="relative min-h-[60vh] md:min-h-[70vh] py-16 md:py-24 flex items-center justify-center text-center overflow-hidden rounded-3xl">
+        <section className="relative min-h-[50vh] md:min-h-[60vh] py-10 md:py-16 flex items-center justify-center text-center overflow-hidden rounded-3xl">
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-10" />
           <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80&w=2070')] bg-cover bg-center opacity-40 scale-110 hover:scale-100 transition-transform duration-1000" />
           
@@ -293,7 +293,7 @@ const Home: React.FC = () => {
             </div>
           )}
 
-          <div className="relative z-20 max-w-4xl px-6 space-y-4 md:space-y-6 pt-16 mt-8">
+          <div className="relative z-20 max-w-4xl px-6 space-y-4 md:space-y-6 pt-10 mt-4">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
@@ -347,16 +347,16 @@ const Home: React.FC = () => {
 
       {/* Improved Live Broadcast Section */}
       {liveLinks.length > 0 && (
-        <section className="space-y-10">
+        <section className="space-y-6">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div className="space-y-2">
               <div className="flex items-center gap-3">
                 <div className="w-2 h-8 bg-neon-red shadow-[0_0_15px_rgba(255,0,60,0.6)]" />
-                <h2 className="text-3xl md:text-4xl font-black uppercase tracking-tighter italic">
+                <h2 className="text-3xl md:text-3xl font-black uppercase tracking-tighter italic">
                   LIVE <span className="text-neon-red">ACTION</span>
                 </h2>
               </div>
-              <p className="text-gray-500 text-xs md:text-sm font-bold uppercase tracking-widest pl-5">
+              <p className="text-gray-500 text-xs md:text-xs font-bold uppercase tracking-widest pl-5">
                 Catch the latest tactical deployments and tournament archives
               </p>
             </div>
@@ -366,7 +366,7 @@ const Home: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {liveLinks.map((link, idx) => {
               const youtubeThumbnail = getYouTubeThumbnail(link.url);
               const thumbnailUrl = link.thumbnailUrl || youtubeThumbnail;
@@ -458,8 +458,8 @@ const Home: React.FC = () => {
                       </div>
 
                       {/* Content Section */}
-                      <div className="p-6 space-y-3">
-                         <h3 className="font-black text-xl text-white group-hover:text-neon-red transition-colors uppercase italic tracking-tight line-clamp-1">
+                      <div className="p-4 space-y-2">
+                         <h3 className="font-black text-lg text-white group-hover:text-neon-red transition-colors uppercase italic tracking-tight line-clamp-1">
                            {link.title}
                          </h3>
                          {link.description && (
@@ -491,7 +491,7 @@ const Home: React.FC = () => {
       )}
 
       {/* Activity Feed */}
-      <section className="space-y-8">
+      <section className="space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-2 h-8 bg-neon-blue shadow-[0_0_10px_rgba(0,229,255,0.5)]" />
           <h2 className="text-2xl font-black uppercase tracking-tighter italic">
@@ -499,26 +499,26 @@ const Home: React.FC = () => {
           </h2>
         </div>
 
-        <div className="grid gap-4">
+        <div className="grid gap-2">
           {recentEvents.map((event, idx) => (
             <motion.div
               key={event.id}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: idx * 0.1 }}
-              className="glass-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-2 border-neon-blue/30 group hover:border-neon-blue transition-all"
+              transition={{ delay: idx * 0.05 }}
+              className="glass-card p-2 px-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-l-2 border-neon-blue/30 group hover:border-neon-blue transition-all"
             >
-              <div className="flex items-center gap-4">
-                <div className={`p-2 rounded-lg bg-white/5 border border-white/10 ${event.type === 'match' ? 'text-neon-red' : 'text-neon-green'}`}>
-                  {event.type === 'match' ? <Swords size={20} /> : <Shield size={20} />}
+              <div className="flex items-center gap-3">
+                <div className={`p-1.5 rounded-md bg-white/5 border border-white/10 ${event.type === 'match' ? 'text-neon-red' : 'text-neon-green'}`}>
+                  {event.type === 'match' ? <Swords size={14} /> : <Shield size={14} />}
                 </div>
                 <div>
-                  <p className="text-xs md:text-sm font-bold uppercase tracking-tight text-white group-hover:text-neon-blue transition-colors">
+                  <p className="text-[11px] sm:text-xs font-bold uppercase tracking-tight text-white group-hover:text-neon-blue transition-colors leading-tight">
                     {event.message}
                   </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Clock size={12} className="text-gray-600" />
-                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <Clock size={10} className="text-gray-600" />
+                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-wider">
                       {(() => {
                         const ts = event.timestamp;
                         if (!ts) return 'TBD';
@@ -531,14 +531,14 @@ const Home: React.FC = () => {
               </div>
               
               <div className="flex items-center gap-2 self-end sm:self-auto">
-                <span className="px-3 py-1 rounded-full bg-white/5 text-[8px] font-black uppercase tracking-[0.2em] text-gray-400 group-hover:text-neon-blue transition-colors">
+                <span className="px-2 py-0.5 rounded bg-white/5 text-[8px] font-black uppercase tracking-[0.15em] text-gray-400 group-hover:text-neon-blue transition-colors">
                   {event.type}
                 </span>
               </div>
             </motion.div>
           ))}
           {recentEvents.length === 0 && (
-            <div className="p-12 glass-card text-center text-gray-500 uppercase tracking-[0.3em] text-[10px] italic">
+            <div className="p-8 glass-card text-center text-gray-500 uppercase tracking-[0.3em] text-[8px] italic">
               Awaiting tactical developments...
             </div>
           )}
@@ -547,14 +547,14 @@ const Home: React.FC = () => {
 
       {/* Features Grid */}
       {settings?.showFeaturesSection !== false && (
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8 w-full">
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 w-full">
           {finalFeatures.filter(f => f.enabled).map((feat, i) => {
             const IconComponent = getIcon(feat.icon);
             return (
               <motion.div
                 key={i}
-                whileHover={{ y: -10 }}
-                className="glass-card p-6 md:p-10 space-y-4 md:space-y-6 relative group overflow-hidden"
+                whileHover={{ y: -6 }}
+                className="glass-card p-5 md:p-6 space-y-3 md:space-y-4 relative group overflow-hidden"
               >
                 <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                   <IconComponent size={100} className="md:w-[120px] md:h-[120px]" />
@@ -575,8 +575,8 @@ const Home: React.FC = () => {
 
       {/* Brand / About section */}
       {settings?.showAboutSection !== false && (
-        <section className="glass-card p-8 md:p-20 relative overflow-hidden backdrop-blur-3xl">
-          <div className="max-w-3xl space-y-6 md:space-y-8 relative z-10">
+        <section className="glass-card p-6 md:p-10 relative overflow-hidden backdrop-blur-3xl">
+          <div className="max-w-3xl space-y-4 md:space-y-5 relative z-10">
             <h2 className="text-3xl md:text-6xl font-black tracking-tighter uppercase italic leading-tight">
               {settings?.aboutTitle || (
                 <>ABOUT <span className="gaming-text-stroke block sm:inline">{guildName}</span></>

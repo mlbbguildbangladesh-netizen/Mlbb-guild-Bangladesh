@@ -68,6 +68,199 @@ async function firebaseAuthRest(action: string, body: any) {
   return data;
 }
 
+// --- FIRESTORE REST API FALLBACKS (Used if Admin SDK fails due to lack of Service Account permissions) ---
+function toRestValue(val: any): any {
+  if (val === null || val === undefined) return { nullValue: null };
+  if (typeof val === 'string') return { stringValue: val };
+  if (typeof val === 'boolean') return { booleanValue: val };
+  if (typeof val === 'number') {
+    if (Number.isInteger(val)) return { integerValue: String(val) };
+    return { doubleValue: val };
+  }
+  if (Array.isArray(val)) {
+    return { arrayValue: { values: val.map(toRestValue) } };
+  }
+  if (typeof val === 'object') {
+    const fields: any = {};
+    for (const key of Object.keys(val)) {
+      fields[key] = toRestValue(val[key]);
+    }
+    return { mapValue: { fields } };
+  }
+  return { stringValue: String(val) };
+}
+
+function fromRestValue(val: any): any {
+  if (!val) return null;
+  if ('stringValue' in val) return val.stringValue;
+  if ('integerValue' in val) return parseInt(val.integerValue, 10);
+  if ('doubleValue' in val) return Number(val.doubleValue);
+  if ('booleanValue' in val) return val.booleanValue;
+  if ('nullValue' in val) return null;
+  if ('arrayValue' in val) {
+    const arr = (val.arrayValue && val.arrayValue.values) || [];
+    return arr.map(fromRestValue);
+  }
+  if ('mapValue' in val) {
+    const fields = (val.mapValue && val.mapValue.fields) || {};
+    const obj: any = {};
+    for (const key of Object.keys(fields)) {
+      obj[key] = fromRestValue(fields[key]);
+    }
+    return obj;
+  }
+  return null;
+}
+
+function fromRestDocument(doc: any): any {
+  if (!doc || !doc.fields) return null;
+  const parts = doc.name ? doc.name.split('/') : [];
+  const id = parts.length > 0 ? parts[parts.length - 1] : null;
+  const fields = doc.fields;
+  const obj: any = { id };
+  for (const key of Object.keys(fields)) {
+    obj[key] = fromRestValue(fields[key]);
+  }
+  return obj;
+}
+
+function toRestDocumentFields(obj: any): any {
+  const fields: any = {};
+  for (const key of Object.keys(obj)) {
+    if (key === 'id') continue;
+    fields[key] = toRestValue(obj[key]);
+  }
+  return { fields };
+}
+
+async function listDocumentsRest(collection: string, token: string, limit?: number, whereField?: string, whereValue?: any) {
+  const headers: any = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  };
+
+  if (whereField && whereValue !== undefined && whereValue !== null) {
+    const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents:runQuery`;
+    
+    let typedValue = whereValue;
+    if (whereValue === 'true') typedValue = true;
+    else if (whereValue === 'false') typedValue = false;
+    else if (!isNaN(Number(whereValue)) && String(whereValue).trim() !== '') {
+      typedValue = Number(whereValue);
+    }
+
+    const body: any = {
+      structuredQuery: {
+        from: [{ collectionId: collection }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: whereField },
+            op: 'EQUAL',
+            value: toRestValue(typedValue)
+          }
+        }
+      }
+    };
+    if (limit) {
+      body.structuredQuery.limit = limit;
+    }
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`REST RunQuery failed: ${res.statusText} - ${errText}`);
+    }
+    const results: any = await res.json();
+    const docs = [];
+    for (const entry of results) {
+      if (entry.document) {
+        const item = fromRestDocument(entry.document);
+        if (item) docs.push(item);
+      }
+    }
+    return docs;
+  } else {
+    let url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents/${collection}`;
+    if (limit) {
+      url += `?pageSize=${limit}`;
+    }
+    const res = await fetch(url, {
+      method: 'GET',
+      headers
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`REST List documents failed: ${res.statusText} - ${errText}`);
+    }
+    const data: any = await res.json();
+    const docs = data.documents || [];
+    return docs.map(fromRestDocument);
+  }
+}
+
+async function updateDocumentRest(collection: string, id: string, data: any, token: string) {
+  const fieldsWrapper = toRestDocumentFields(data);
+  const keys = Object.keys(data).filter(k => k !== 'id');
+  const updateMaskParams = keys.map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');
+  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents/${collection}/${id}?${updateMaskParams}`;
+
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(fieldsWrapper)
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`REST Update document failed: ${res.statusText} - ${errText}`);
+  }
+  return { success: true };
+}
+
+async function addDocumentRest(collection: string, data: any, token: string) {
+  const fieldsWrapper = toRestDocumentFields(data);
+  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents/${collection}`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(fieldsWrapper)
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`REST Add document failed: ${res.statusText} - ${errText}`);
+  }
+  const resData: any = await res.json();
+  const parts = resData.name ? resData.name.split('/') : [];
+  const id = parts.length > 0 ? parts[parts.length - 1] : null;
+  return { success: true, id };
+}
+
+async function deleteDocumentRest(collection: string, id: string, token: string) {
+  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents/${collection}/${id}`;
+
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`REST Delete document failed: ${res.statusText} - ${errText}`);
+  }
+  return { success: true };
+}
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 let genAI: GoogleGenerativeAI | null = null;
@@ -259,41 +452,96 @@ async function startServer() {
           console.log(`[AIHelper] Executing tool: ${name}`, args);
           const toolArgs = args as any;
 
+          const authHeader = req.headers.authorization;
+          const token = authHeader ? authHeader.split('Bearer ')[1] : null;
+
           let toolResult;
           try {
             switch (name) {
               case "list_documents": {
-                let query: any = getAdminDb().collection(toolArgs.collection as string);
-                if (toolArgs.whereField && toolArgs.whereValue) {
-                  query = query.where(toolArgs.whereField, '==', toolArgs.whereValue);
+                if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON && token) {
+                  toolResult = await listDocumentsRest(toolArgs.collection as string, token, toolArgs.limit, toolArgs.whereField, toolArgs.whereValue);
+                } else {
+                  try {
+                    let query: any = getAdminDb().collection(toolArgs.collection as string);
+                    if (toolArgs.whereField && toolArgs.whereValue) {
+                      query = query.where(toolArgs.whereField, '==', toolArgs.whereValue);
+                    }
+                    if (toolArgs.limit) {
+                      query = query.limit(toolArgs.limit);
+                    }
+                    const snap = await query.get();
+                    toolResult = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+                  } catch (adminErr: any) {
+                    console.warn(`[AIHelper] list_documents Admin SDK failed, trying REST fallback. Error:`, adminErr.message);
+                    if (token) {
+                      toolResult = await listDocumentsRest(toolArgs.collection as string, token, toolArgs.limit, toolArgs.whereField, toolArgs.whereValue);
+                    } else {
+                      throw adminErr;
+                    }
+                  }
                 }
-                if (toolArgs.limit) {
-                  query = query.limit(toolArgs.limit);
-                }
-                const snap = await query.get();
-                toolResult = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
                 break;
               }
               case "update_document": {
-                await getAdminDb().collection(toolArgs.collection as string).doc(toolArgs.id as string).update(toolArgs.data as object);
-                toolResult = { success: true };
+                if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON && token) {
+                  toolResult = await updateDocumentRest(toolArgs.collection as string, toolArgs.id as string, toolArgs.data as object, token);
+                } else {
+                  try {
+                    await getAdminDb().collection(toolArgs.collection as string).doc(toolArgs.id as string).update(toolArgs.data as object);
+                    toolResult = { success: true };
+                  } catch (adminErr: any) {
+                    console.warn(`[AIHelper] update_document Admin SDK failed, trying REST fallback. Error:`, adminErr.message);
+                    if (token) {
+                      toolResult = await updateDocumentRest(toolArgs.collection as string, toolArgs.id as string, toolArgs.data as object, token);
+                    } else {
+                      throw adminErr;
+                    }
+                  }
+                }
                 break;
               }
               case "add_document": {
-                const docRef = await getAdminDb().collection(toolArgs.collection as string).add(toolArgs.data as object);
-                toolResult = { success: true, id: docRef.id };
+                if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON && token) {
+                  toolResult = await addDocumentRest(toolArgs.collection as string, toolArgs.data as object, token);
+                } else {
+                  try {
+                    const docRef = await getAdminDb().collection(toolArgs.collection as string).add(toolArgs.data as object);
+                    toolResult = { success: true, id: docRef.id };
+                  } catch (adminErr: any) {
+                    console.warn(`[AIHelper] add_document Admin SDK failed, trying REST fallback. Error:`, adminErr.message);
+                    if (token) {
+                      toolResult = await addDocumentRest(toolArgs.collection as string, toolArgs.data as object, token);
+                    } else {
+                      throw adminErr;
+                    }
+                  }
+                }
                 break;
               }
               case "delete_document": {
-                await getAdminDb().collection(toolArgs.collection as string).doc(toolArgs.id as string).delete();
-                toolResult = { success: true };
+                if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON && token) {
+                  toolResult = await deleteDocumentRest(toolArgs.collection as string, toolArgs.id as string, token);
+                } else {
+                  try {
+                    await getAdminDb().collection(toolArgs.collection as string).doc(toolArgs.id as string).delete();
+                    toolResult = { success: true };
+                  } catch (adminErr: any) {
+                    console.warn(`[AIHelper] delete_document Admin SDK failed, trying REST fallback. Error:`, adminErr.message);
+                    if (token) {
+                      toolResult = await deleteDocumentRest(toolArgs.collection as string, toolArgs.id as string, token);
+                    } else {
+                      throw adminErr;
+                    }
+                  }
+                }
                 break;
               }
               default:
                 toolResult = { error: "Unknown tool" };
             }
           } catch (err: any) {
-            console.error(`[AIHelper] Tool ${name} failed:`, err);
+            console.error(`[AIHelper] Tool ${name} failed eventually:`, err);
             toolResult = { error: err.message };
           }
 

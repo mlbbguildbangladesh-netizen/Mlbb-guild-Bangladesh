@@ -20,7 +20,8 @@ import {
   Briefcase,
   Crosshair,
   List,
-  Star
+  Star,
+  UserCheck
 } from 'lucide-react';
 import { 
   collection, 
@@ -534,15 +535,34 @@ export default function SoloPlayers() {
   }
 
   return (
-    <div className="space-y-12 pb-20">
-      <section className="relative py-20 px-8 overflow-hidden rounded-3xl group">
+    <div className="space-y-8 pb-10">
+      <section className="relative py-10 px-6 overflow-hidden rounded-3xl group">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-xl border border-white/10" />
         <div className="absolute inset-0 bg-gradient-to-br from-neon-blue/10 via-transparent to-neon-purple/10 opacity-50" />
         
         <div className="relative z-10 max-w-4xl mx-auto text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-neon-blue/10 border border-neon-blue/20 mb-4">
-            <Users size={14} className="text-neon-blue" />
-            <span className="text-[10px] font-black tracking-[0.3em] text-neon-blue uppercase">Recruitment Hub</span>
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-neon-blue/10 border border-neon-blue/20">
+              <Users size={14} className="text-neon-blue" />
+              <span className="text-[10px] font-black tracking-[0.3em] text-neon-blue uppercase">Recruitment Hub</span>
+            </div>
+            
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-black uppercase text-gray-300">
+              <span className="font-extrabold text-white">{computedPlayers.length}</span>
+              <span className="text-gray-500 text-[8px] font-bold">TOTAL</span>
+            </div>
+
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neon-green/10 border border-neon-green/20 text-[10px] font-black uppercase text-neon-green">
+              <span className="font-extrabold">{computedPlayers.filter(p => p.status !== 'booked').length}</span>
+              <span className="text-neon-green/70 text-[8px] font-bold">FREE</span>
+            </div>
+
+            {currentTeam && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neon-blue/10 border border-neon-blue/20 text-[10px] font-black uppercase text-neon-blue">
+                <span className="font-extrabold">{currentTeam.recruitmentSlots || 0}</span>
+                <span className="text-neon-blue/70 text-[8px] font-bold">SLOTS</span>
+              </div>
+            )}
           </div>
           
           <h1 className="text-5xl md:text-7xl font-black italic tracking-tighter uppercase leading-none">
@@ -553,16 +573,7 @@ export default function SoloPlayers() {
             Hire tactical units for your team or request to join established guilds. Manage requests and track active mercenaries here.
           </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-4 pt-8">
-            {currentTeam && (
-              <div className="flex flex-col items-center gap-2 px-6 py-4 bg-neon-blue/10 border border-neon-blue/20 rounded-xl">
-                <div className="flex items-center gap-2">
-                  <Users size={16} className="text-neon-blue" />
-                   <span className="text-xl font-black text-neon-blue">{currentTeam.recruitmentSlots || 0}</span>
-                </div>
-                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Available Recruitment Slots</span>
-              </div>
-            )}
+          <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
             
             {!userSoloProfile && user && !isAdmin && !isModerator ? (
               settings?.allowSoloRegistration !== false ? (
@@ -731,7 +742,7 @@ export default function SoloPlayers() {
                   key={player.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="group relative glass-card p-8 space-y-6 hover:border-neon-blue/30 transition-all border-l-4 border-l-transparent hover:border-l-neon-blue flex flex-col"
+                  className="group relative glass-card p-5 space-y-4 hover:border-neon-blue/30 transition-all border-l-4 border-l-transparent hover:border-l-neon-blue flex flex-col"
                 >
                   <div className="flex justify-between items-start">
                     <div className="space-y-1">
@@ -949,7 +960,7 @@ export default function SoloPlayers() {
                   key={team.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="group relative glass-card p-8 space-y-6 flex flex-col"
+                  className="group relative glass-card p-5 space-y-4 flex flex-col"
                 >
                   <div className="flex items-center gap-4">
                      {team.logoUrl ? (

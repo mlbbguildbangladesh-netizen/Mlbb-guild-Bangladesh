@@ -98,7 +98,7 @@ const Results: React.FC = () => {
   };
 
   return (
-    <div className="py-6 md:py-10 space-y-8 md:space-y-12 relative">
+    <div className="py-4 md:py-6 space-y-5 md:space-y-6 relative">
       {/* Header Section */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 text-neon-blue font-black tracking-[0.2em] text-[10px] uppercase">

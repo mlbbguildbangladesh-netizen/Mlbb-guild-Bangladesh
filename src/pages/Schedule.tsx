@@ -206,11 +206,22 @@ const Schedule: React.FC = () => {
       });
     });
     return combined.sort((a, b) => {
-      const now = Date.now();
+      const getPriority = (status?: string) => {
+        if (status === 'live') return 0;
+        if (status === 'completed') return 2;
+        return 1; // upcoming or others
+      };
+
+      const priorityA = getPriority(a.status);
+      const priorityB = getPriority(b.status);
+
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+
       const dateA = a.date !== 'TBD' ? new Date(`${a.date}T${a.time !== 'TBD' ? a.time : '00:00'}`).getTime() : Infinity;
       const dateB = b.date !== 'TBD' ? new Date(`${b.date}T${b.time !== 'TBD' ? b.time : '00:00'}`).getTime() : Infinity;
       
-      // Chronological ASC: earlier matches (including finished) at the top, upcoming below them.
       return dateA - dateB;
     });
   }, [matches, challenges, teams]);
@@ -218,6 +229,7 @@ const Schedule: React.FC = () => {
   const filteredMatches = useMemo(() => {
     const now = Date.now();
     return allMatchesList.filter(match => {
+      if (match.status === 'cancelled') return false;
       const matchDateTime = match.date !== 'TBD' ? new Date(`${match.date}T${match.time !== 'TBD' ? match.time : '00:00'}`).getTime() : Infinity;
       const isTimePassed = now > (matchDateTime + 60 * 60 * 1000); // 1 hour grace period for "live" or simple logic, user said "once 8 o clock is over"
 
@@ -301,7 +313,7 @@ const Schedule: React.FC = () => {
   };
 
   return (
-    <div className="py-6 md:py-10 space-y-8 md:space-y-12 relative overflow-hidden">
+    <div className="py-4 md:py-6 space-y-5 md:space-y-6 relative overflow-hidden">
       {/* Background Decor */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none -z-10">
         <div className="absolute top-[10%] left-[-5%] w-[40%] h-[30%] bg-neon-blue/5 blur-[120px] rounded-full" />

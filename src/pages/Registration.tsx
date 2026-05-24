@@ -548,7 +548,7 @@ const Registration: React.FC = () => {
 
   if (submitted) {
     return (
-      <div className="max-w-4xl mx-auto py-20 text-center space-y-10">
+      <div className="max-w-4xl mx-auto py-10 text-center space-y-6">
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
@@ -649,7 +649,7 @@ const Registration: React.FC = () => {
 
   if (!user) {
     return (
-      <div className="max-w-2xl mx-auto py-20 text-center space-y-8">
+      <div className="max-w-2xl mx-auto py-10 text-center space-y-5">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -685,7 +685,7 @@ const Registration: React.FC = () => {
 
   if (settings?.registrationEnabled === false && !isAdmin) {
     return (
-      <div className="max-w-2xl mx-auto py-20 text-center space-y-8">
+      <div className="max-w-2xl mx-auto py-10 text-center space-y-5">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -712,7 +712,7 @@ const Registration: React.FC = () => {
   }
 
   return (
-    <div className="max-w-2xl mx-auto py-10 space-y-8">
+    <div className="max-w-2xl mx-auto py-6 space-y-5">
       <div className="space-y-2 flex justify-between items-end">
         <div>
           <h1 className="text-4xl font-black">TEAM <span className="text-neon-blue">REGISTRATION</span></h1>
@@ -787,7 +787,7 @@ const Registration: React.FC = () => {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        <div className="glass-card p-8 space-y-6">
+        <div className="glass-card p-5 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             <div className="space-y-2">
               <label className="text-[10px] md:text-xs font-black uppercase text-gray-500 flex items-center gap-2">
@@ -910,7 +910,7 @@ const Registration: React.FC = () => {
           </div>
         </div>
 
-        <div className="glass-card p-8 space-y-8">
+        <div className="glass-card p-5 space-y-4">
           <div className="grid md:grid-cols-2 gap-8">
             {logoField?.enabled && !settings?.hideLogoUpload && (
               <div className="space-y-4">

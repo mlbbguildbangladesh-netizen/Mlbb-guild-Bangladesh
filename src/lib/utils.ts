@@ -130,9 +130,10 @@ export const recordMatchResult = async (
   if (!manualPoints && !manualDiamonds) {
     if (resultType === 'win') {
       if (winnerId === teamAId) {
-        const bonus = getRankBonus(teamAData.rank);
-        pointsA = 50 + bonus; 
-        diamondsA = 20 + bonus;
+        const rankBonus = getRankBonus(teamAData.rank);
+        const streakBonus = (teamAData.streak || 0) * 20;
+        pointsA = 50 + rankBonus + streakBonus; 
+        diamondsA = 20 + rankBonus;
         
         pointsB = -20; 
         diamondsB = -30;
@@ -140,9 +141,10 @@ export const recordMatchResult = async (
         newStreakA += 1;
         newStreakB = 0;
       } else if (winnerId === teamBId) {
-        const bonus = getRankBonus(teamBData.rank);
-        pointsB = 50 + bonus; 
-        diamondsB = 20 + bonus;
+        const rankBonus = getRankBonus(teamBData.rank);
+        const streakBonus = (teamBData.streak || 0) * 20;
+        pointsB = 50 + rankBonus + streakBonus; 
+        diamondsB = 20 + rankBonus;
 
         pointsA = -20; 
         diamondsA = -30;

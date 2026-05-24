@@ -10,7 +10,7 @@ import { Logo } from './Logo';
 import { NotificationBell } from './NotificationBell';
 
 const Navbar: React.FC = () => {
-  const { user, firebaseUser, isAdmin, isModerator, settings } = useAuth();
+  const { user, firebaseUser, isAdmin, isModerator, moderatorPermissions, settings } = useAuth();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = React.useState(false);
 
@@ -24,7 +24,8 @@ const Navbar: React.FC = () => {
   ];
 
   const hasPublicSheets = settings?.googleSheets?.some(s => s.isPublic);
-  if (isAdmin || hasPublicSheets) {
+  const hasDatabasePermission = isModerator && moderatorPermissions?.includes('database');
+  if (isAdmin || hasPublicSheets || hasDatabasePermission) {
     navItems.push({ name: 'Database', path: '/database', icon: Table });
   }
 

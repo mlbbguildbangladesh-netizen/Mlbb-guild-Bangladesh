@@ -77,7 +77,7 @@ const Leaderboard: React.FC = () => {
     });
 
   return (
-    <div className="py-6 md:py-10 space-y-8 md:space-y-10">
+    <div className="py-4 md:py-6 space-y-5 md:space-y-6">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-1">
         <div className="space-y-4 md:space-y-6">
           <div className="space-y-2">

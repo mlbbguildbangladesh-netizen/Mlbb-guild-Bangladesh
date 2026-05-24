@@ -1911,7 +1911,7 @@ const Admin: React.FC = () => {
   }
 
   return (
-    <div className="py-10 space-y-10">
+    <div className="py-6 space-y-6">
       <div className="flex items-end justify-between">
         <div className="space-y-1">
           <h1 className="text-4xl font-black italic">CONTROL <span className="text-neon-blue">PANEL</span></h1>
@@ -4390,6 +4390,8 @@ Supports multiple lines."
                                 { id: 'registrations', name: 'Regs' },
                                 { id: 'matches', name: 'Record' },
                                 { id: 'teams', name: 'Teams' },
+                                { id: 'database', name: 'Database' },
+                                { id: 'sheets', name: 'Sheets' },
                                 { id: 'users', name: 'Users' },
                                 { id: 'pass-reqs', name: 'Pass Req' },
                                 { id: 'transactions', name: 'Logs' },

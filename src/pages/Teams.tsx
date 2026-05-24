@@ -58,7 +58,7 @@ const Teams: React.FC = () => {
   };
 
   return (
-    <div className="py-10 space-y-10">
+    <div className="py-6 space-y-6">
       <div className="space-y-1">
         <h1 className="text-4xl sm:text-5xl md:text-7xl font-black italic uppercase tracking-tighter">ALL <span className="gaming-text-stroke">TEAMS</span></h1>
         <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Official Guild Members of MGB Bangladesh</p>
