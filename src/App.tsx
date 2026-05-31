@@ -24,6 +24,7 @@ const Schedule = lazy(() => import('./pages/Schedule'));
 const Results = lazy(() => import('./pages/Results'));
 const Profile = lazy(() => import('./pages/Profile'));
 const SoloPlayers = lazy(() => import('./pages/SoloPlayers'));
+const TrainingGround = lazy(() => import('./pages/TrainingGround'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 
 const LoadingFallback = () => (
@@ -51,23 +52,45 @@ const ProtectedRoute = ({ children, adminOnly = false }: { children: React.React
 export default function App() {
   return (
     <AuthProvider>
-      <Toaster position="top-center" toastOptions={{
+      <Toaster position="bottom-right" reverseOrder={false} toastOptions={{
+        className: '',
         style: {
-          background: '#1a1d23',
-          color: '#fff',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          fontSize: '12px',
-          fontWeight: '900',
-          letterSpacing: '0.05em',
-          textTransform: 'uppercase',
+          background: 'rgba(26, 29, 35, 0.95)',
+          backdropFilter: 'blur(10px)',
+          color: '#e2e8f0', // slate-200
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          fontSize: '14px',
+          fontWeight: '500',
+          letterSpacing: '0.01em',
           borderRadius: '12px',
+          padding: '14px 20px',
+          boxShadow: '0 10px 30px -10px rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
         },
         success: {
           iconTheme: {
-            primary: '#00E5FF',
-            secondary: '#000',
+            primary: '#10b981', // emerald-500
+            secondary: '#fff',
           },
+          style: {
+            borderLeft: '4px solid #10b981',
+          }
         },
+        error: {
+          iconTheme: {
+            primary: '#ef4444', // red-500
+            secondary: '#fff',
+          },
+          style: {
+            borderLeft: '4px solid #ef4444',
+          }
+        },
+        loading: {
+          style: {
+            borderLeft: '4px solid #3b82f6', // blue-500
+          }
+        }
       }} />
       <Router>
         <Layout>
@@ -87,6 +110,7 @@ export default function App() {
               <Route path="/registration" element={<Registration />} />
               <Route path="/shop" element={<Shop />} />
               <Route path="/solo-players" element={<SoloPlayers />} />
+              <Route path="/training" element={<TrainingGround />} />
               <Route path="/login" element={<Login />} />
               <Route path="/privacy-policy" element={<PrivacyPolicy />} />
               

@@ -20,6 +20,7 @@ import { signInWithCustomToken } from 'firebase/auth';
 import { FALLBACK_IMAGE, uploadExternalImageToStorage } from '../lib/utils';
 import { ImageWithFallback } from '../components/ImageWithFallback';
 import { createNotification } from '../lib/notificationUtils';
+import { showConfirmToast } from '../lib/toastUtils';
 import { askGemini, SystemData } from '../services/geminiService';
 
 enum OperationType {
@@ -1278,7 +1279,12 @@ const Admin: React.FC = () => {
         console.error('Failed to cleanup password request', e);
       }
     } else {
-      if (window.confirm(`Cannot find a registered user with email: ${email}.\nDo you want to delete this invalid request?`)) {
+      const confirm = await showConfirmToast({
+        title: "Delete Invalid Request",
+        message: `Cannot find a registered user with email: ${email}.\nDo you want to delete this invalid request?`,
+        type: "warning"
+      });
+      if (confirm) {
         try {
           await deleteDoc(doc(db, 'passwordRequests', reqId));
         } catch (e) {
@@ -1295,7 +1301,13 @@ const Admin: React.FC = () => {
       return;
     }
 
-    if (!window.confirm("ARE YOU SURE? You will be logged out of your current staff session and logged in as this user to test their experience during maintenance.")) {
+    const confirm = await showConfirmToast({
+      title: "Confirm Impersonate",
+      message: "ARE YOU SURE? You will be logged out of your current staff session and logged in as this user to test their experience during maintenance.",
+      type: "danger",
+      confirmLabel: "Impersonate"
+    });
+    if (!confirm) {
       return;
     }
 
@@ -2085,6 +2097,26 @@ const Admin: React.FC = () => {
                         </>
                       )}
 
+                      {reg.status === 'rejected' && (
+                        <button 
+                          onClick={async () => {
+                            if (processingId) return;
+                            setProcessingId(reg.id);
+                            try {
+                              await updateDoc(doc(db, 'registrations', reg.id), { status: 'pending' });
+                              toast.success("Restored to pending.");
+                            } catch (e) {
+                              toast.error("Failed to restore.");
+                            } finally {
+                              setProcessingId(null);
+                            }
+                          }}
+                          className="px-6 py-2 bg-yellow-500/20 text-yellow-500 rounded-lg text-sm font-black flex items-center gap-2 border border-yellow-500/20 hover:bg-yellow-500/30 transition-all"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> RESTORE
+                        </button>
+                      )}
+
                       <button 
                         onClick={() => setConfirmDeleteRegId(reg.id)}
                         className="px-4 py-2 bg-neon-red/10 text-neon-red rounded-lg text-xs font-black flex items-center gap-2 border border-neon-red/10 hover:bg-neon-red/20 transition-all font-mono"
@@ -2463,7 +2495,13 @@ const Admin: React.FC = () => {
               <div className="flex items-center gap-4">
                 <button 
                   onClick={async () => {
-                    if (window.confirm("Grant 2 recruitment slots to all approved teams?")) {
+                    const confirm = await showConfirmToast({
+                      title: "Grant Recruitment Slots",
+                      message: "Grant 2 recruitment slots to all approved teams?",
+                      type: "warning",
+                      confirmLabel: "Grant Slots"
+                    });
+                    if (confirm) {
                       const batch = writeBatch(db);
                       teams.forEach(t => {
                         batch.update(doc(db, 'teams', t.id), { recruitmentSlots: 2 });

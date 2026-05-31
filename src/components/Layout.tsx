@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Home, Trophy, Users, ShoppingCart, User as UserIcon, LogOut, Menu, X, LayoutDashboard, Swords, AlertCircle, Shield, Diamond, Calendar, History, Table, Book } from 'lucide-react';
+import { Home, Trophy, Users, ShoppingCart, User as UserIcon, LogOut, Menu, X, LayoutDashboard, Swords, AlertCircle, Shield, Diamond, Calendar, History, Table, Book, Flame } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../lib/firebase';
@@ -47,6 +47,8 @@ const Navbar: React.FC = () => {
   if (settings?.showSoloPlayers !== false) {
     navItems.push({ name: 'Solo Players', path: '/solo-players', icon: Shield });
   }
+
+  navItems.push({ name: 'Training Ground', path: '/training', icon: Flame });
 
   if (settings?.showShop !== false) {
     navItems.push({ name: 'Shop', path: '/shop', icon: ShoppingCart });

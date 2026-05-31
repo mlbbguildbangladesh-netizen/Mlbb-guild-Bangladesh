@@ -56,6 +56,7 @@ export interface Team {
   serverId?: string;
   phoneNumber?: string;
   recruitmentSlots?: number;
+  publicRatings?: Record<string, number>;
 }
 
 export const MATCH_SLOTS = ["20:00", "20:30", "21:00", "21:30", "22:00", "22:30", "23:00"] as const;
@@ -260,4 +261,90 @@ export interface AppSetting {
     permissions: string[];
   }[];
   googleSheets?: GoogleSheetConfig[];
+}
+
+export interface TrainingPlayerStats {
+  totalMatches: number;
+  wins: number;
+  losses: number;
+  mvps: number;
+  totalKd: number;
+  avgKd: number;
+  winRate: number;
+  points: number;
+}
+
+export interface TrainingPlayer {
+  id: string; // UID as doc ID
+  uid: string;
+  inGameName: string;
+  teamId: string;
+  teamName: string;
+  mainRole: string;
+  currentKd: number;
+  rating: number;
+  stats: TrainingPlayerStats;
+  isBanned?: boolean;
+  updatedAt?: any;
+}
+
+export interface TrainingTeamStats {
+  totalMatches: number;
+  wins: number;
+  losses: number;
+  points: number;
+  mvpCount: number;
+  totalKd: number;
+  avgKd: number;
+  winRate: number;
+  winStreak?: number;
+  diamonds?: number;
+}
+
+export interface TrainingTeam {
+  id: string;
+  teamName: string;
+  logoUrl?: string;
+  uniqueId: string;
+  captainName: string;
+  captainUid: string;
+  status: RegistrationStatus;
+  players: {
+    uid: string;
+    inGameName: string;
+    mainRole: string;
+    currentKd: number;
+    rating: number;
+  }[];
+  stats: TrainingTeamStats;
+  createdAt: any;
+  publicRatings?: Record<string, number>;
+}
+
+export interface TrainingMatch {
+  id: string;
+  teamId: string;
+  teamName: string;
+  opponentTeamId: string;
+  opponentTeamName: string;
+  matchNumber: number; // 1, 2, 3, 4
+  win: boolean;
+  mvpUid: string;
+  mvpName: string;
+  playerKds: Record<string, number>;
+  screenshotUrl?: string;
+  notes?: string;
+  date: string; // YYYY-MM-DD
+  pointsAwarded: number;
+  isFlagged?: boolean;
+  flagReason?: string;
+  createdAt: any;
+}
+
+export interface BannedUid {
+  id: string;
+  uid: string;
+  reason?: string;
+  bannedBy?: string;
+  createdAt: any;
 }

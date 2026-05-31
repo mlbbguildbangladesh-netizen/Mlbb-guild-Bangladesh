@@ -10,6 +10,7 @@ import { recordMatchResult } from '../lib/utils';
 import { ImageWithFallback } from './ImageWithFallback';
 import CountdownTimer from './CountdownTimer';
 import toast from 'react-hot-toast';
+import { showConfirmToast } from '../lib/toastUtils';
 
 export default function SchedulesAdmin() {
   const [schedules, setSchedules] = useState<ScheduleMatch[]>([]);
@@ -64,7 +65,12 @@ export default function SchedulesAdmin() {
 
     const hasConflict = schedules.some(s => s.date === newMatch.date && s.time === newMatch.time && s.status !== 'cancelled');
     if (hasConflict) {
-      if (!window.confirm(`There is already a match scheduled for ${newMatch.date} at ${newMatch.time}. Do you still want to add this match?`)) {
+      const confirm = await showConfirmToast({
+        title: "Match Conflict",
+        message: `There is already a match scheduled for ${newMatch.date} at ${newMatch.time}. Do you still want to add this match?`,
+        type: "warning"
+      });
+      if (!confirm) {
         return;
       }
     }
@@ -168,7 +174,13 @@ export default function SchedulesAdmin() {
   };
 
   const handleResetSeasonCounts = async () => {
-    if (!window.confirm("Search and destroy? This will reset all team season match counts to 0. Are you sure?")) {
+    const confirm = await showConfirmToast({
+      title: "Reset Season Counts",
+      message: "Search and destroy? This will reset all team season match counts to 0. Are you sure?",
+      type: "danger",
+      confirmLabel: "Reset All"
+    });
+    if (!confirm) {
       return;
     }
     try {

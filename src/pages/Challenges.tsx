@@ -53,6 +53,8 @@ import { FALLBACK_IMAGE } from '../lib/utils';
 import { ImageWithFallback } from '../components/ImageWithFallback';
 import { createNotification } from '../lib/notificationUtils';
 
+import { showConfirmToast } from '../lib/toastUtils';
+
 const Challenges: React.FC = () => {
   const { user, isAdmin, settings: globalSettings } = useAuth();
 
@@ -80,12 +82,50 @@ const Challenges: React.FC = () => {
   const [acceptModalData, setAcceptModalData] = useState<{ c: Challenge, fromTeam: Team } | null>(null);
 
   const activeChallenges = useMemo(() => {
-    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const today = new Date();
+    const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
     return challenges.filter(c => {
-      if (!c.timestamp) return true; // Keep legacy if no timestamp
+      if (c.challengeDetails) {
+        const hasValidDate = Object.values(c.challengeDetails).some((d: any) => d.date >= todayStr);
+        return hasValidDate;
+      }
+      // If no details (legacy), use the 24 hour rule
+      if (!c.timestamp) return true;
+      const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
       const timestamp = c.timestamp?.toMillis ? c.timestamp.toMillis() : (typeof c.timestamp === 'number' ? c.timestamp : new Date(c.timestamp).getTime());
       return timestamp > oneDayAgo;
     });
+  }, [challenges]);
+
+  // Auto-cleanup expired challenges
+  useEffect(() => {
+    if (!challenges.length) return;
+    const today = new Date();
+    const todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
+    const expiredChallenges = challenges.filter(c => {
+      if (!c.challengeDetails) return false;
+      const keys = Object.keys(c.challengeDetails);
+      if (keys.length === 0) return false;
+      const allDatesPast = Object.values(c.challengeDetails).every((d: any) => d.date && d.date < todayStr);
+      return allDatesPast;
+    });
+
+    if (expiredChallenges.length > 0) {
+      const cleanUp = async () => {
+        try {
+          const batch = writeBatch(db);
+          expiredChallenges.forEach(c => {
+            batch.delete(doc(db, 'challenges', c.id));
+          });
+          await batch.commit();
+        } catch (err) {
+          console.error("Failed to cleanup expired challenges:", err);
+        }
+      };
+      cleanUp();
+    }
   }, [challenges]);
 
   const currentTeam = useMemo(() => {
@@ -438,7 +478,12 @@ const Challenges: React.FC = () => {
   const handleReject = async (challenge: Challenge) => {
     if (!currentTeam) return;
     
-    const confirmReject = window.confirm("IF YOU REJECT, YOUR 10 POINT WILL BE MINUS. ARE YOU SURE?");
+    const confirmReject = await showConfirmToast({
+      title: "Confirm Penalty",
+      message: "If you reject this challenge, your team will lose 10 points. Are you sure you want to proceed?",
+      type: "danger",
+      confirmLabel: "Reject Challenge & Lose Points"
+    });
     if (!confirmReject) return;
 
     try {

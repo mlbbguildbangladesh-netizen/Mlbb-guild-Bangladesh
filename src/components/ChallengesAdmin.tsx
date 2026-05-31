@@ -55,6 +55,7 @@ export default function ChallengesAdmin() {
     useManual: false,
   });
   const [isReporting, setIsReporting] = useState(false);
+  const [cancelingMatch, setCancelingMatch] = useState<ScheduleMatch | null>(null);
 
   useEffect(() => {
     const unsubTeams = onSnapshot(collection(db, "teams"), (snap) => {
@@ -359,14 +360,7 @@ export default function ChallengesAdmin() {
   };
 
   const handleCancelMatch = async (match: ScheduleMatch) => {
-    if (
-      !window.confirm(
-        `Are you sure you want to cancel the match between ${match.team1Name} and ${match.team2Name}? This will set its status to cancelled and restore match limits.`,
-      )
-    ) {
-      return;
-    }
-
+    setProcessingId(match.id);
     try {
       const batch = writeBatch(db);
 
@@ -414,11 +408,14 @@ export default function ChallengesAdmin() {
       }
 
       toast.success("Match cancelled successfully.");
+      setCancelingMatch(null);
     } catch (err: any) {
       console.error(err);
       toast.error(
         "Failed to cancel match: " + (err.message || "Unknown error"),
       );
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -433,6 +430,44 @@ export default function ChallengesAdmin() {
     <div className="space-y-12">
       {/* Result Reporting Modal */}
       <AnimatePresence>
+        {cancelingMatch && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              className="glass-card p-6 max-w-sm w-full relative overflow-hidden text-center"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-neon-red"></div>
+              <X size={40} className="text-neon-red mx-auto mb-4" />
+              <h3 className="text-lg font-black uppercase text-white mb-2">Cancel Match</h3>
+              <p className="text-xs text-gray-400 mb-6">
+                Are you sure you want to cancel the match between <span className="text-white font-bold">{cancelingMatch.team1Name}</span> and <span className="text-white font-bold">{cancelingMatch.team2Name}</span>? This will set its status to cancelled and restore match limits.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setCancelingMatch(null)}
+                  disabled={processingId === cancelingMatch.id}
+                  className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white text-xs font-black uppercase rounded-lg transition-all"
+                >
+                  Keep
+                </button>
+                <button
+                  onClick={() => handleCancelMatch(cancelingMatch)}
+                  disabled={processingId === cancelingMatch.id}
+                  className="px-4 py-2 bg-neon-red hover:bg-[#ff0033] text-white text-xs font-black uppercase rounded-lg transition-all shadow-[0_0_15px_rgba(255,0,85,0.4)] disabled:opacity-50"
+                >
+                  {processingId === cancelingMatch.id ? "Canceling..." : "Confirm Cancel"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
         {reportingMatch && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -750,7 +785,7 @@ export default function ChallengesAdmin() {
                       <div className="flex items-center gap-3">
                         {isUpcoming ? (
                           <button
-                            onClick={() => handleCancelMatch(s)}
+                            onClick={() => setCancelingMatch(s)}
                             className="px-4 py-2 bg-neon-red/10 border border-neon-red/30 hover:bg-neon-red text-neon-red hover:text-white font-black uppercase text-[10px] rounded-lg transition-all active:scale-95 flex items-center gap-1.5 shadow-[0_0_15px_rgba(255,0,85,0.15)]"
                           >
                             <X size={12} />

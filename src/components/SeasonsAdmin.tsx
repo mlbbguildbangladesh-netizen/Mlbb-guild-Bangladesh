@@ -4,6 +4,7 @@ import { db } from '../lib/firebase';
 import { Season, AppSetting } from '../types';
 import { Calendar, Plus, Trash, Check, X, Pencil, Star } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { showConfirmToast } from '../lib/toastUtils';
 import { handleFirestoreError, OperationType } from '../lib/firebase';
 
 export default function SeasonsAdmin() {
@@ -68,7 +69,13 @@ export default function SeasonsAdmin() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this season? This cannot be undone.')) return;
+    const confirm = await showConfirmToast({
+      title: "Delete Season",
+      message: "Delete this season? This cannot be undone.",
+      type: "danger",
+      confirmLabel: "Delete"
+    });
+    if (!confirm) return;
     try {
       await deleteDoc(doc(db, 'seasons', id));
     } catch(err) {

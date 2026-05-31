@@ -232,6 +232,80 @@
         "maintenanceMode": { "type": "boolean" }
       },
       "required": ["challengePhaseLocked", "allowOldTeamRegistration"]
+    },
+    "TrainingTeam": {
+      "title": "TrainingTeam",
+      "description": "Teams registered in the training grounds",
+      "type": "object",
+      "properties": {
+        "teamName": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "uniqueId": { "type": "string" },
+        "captainName": { "type": "string" },
+        "captainUid": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "players": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "stats": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["teamName", "captainName", "captainUid", "status"]
+    },
+    "TrainingPlayer": {
+      "title": "TrainingPlayer",
+      "description": "Individual stats for a player in a training team",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "inGameName": { "type": "string" },
+        "teamId": { "type": "string" },
+        "teamName": { "type": "string" },
+        "mainRole": { "type": "string" },
+        "currentKd": { "type": "number" },
+        "rating": { "type": "number" },
+        "stats": { "type": "object" },
+        "isBanned": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "inGameName", "teamId", "teamName", "mainRole"]
+    },
+    "TrainingMatch": {
+      "title": "TrainingMatch",
+      "description": "Daily matches submitted by training teams",
+      "type": "object",
+      "properties": {
+        "teamId": { "type": "string" },
+        "teamName": { "type": "string" },
+        "opponentTeamId": { "type": "string" },
+        "opponentTeamName": { "type": "string" },
+        "matchNumber": { "type": "number" },
+        "win": { "type": "boolean" },
+        "mvpUid": { "type": "string" },
+        "mvpName": { "type": "string" },
+        "playerKds": { "type": "object" },
+        "screenshotUrl": { "type": "string" },
+        "notes": { "type": "string" },
+        "date": { "type": "string" },
+        "pointsAwarded": { "type": "number" },
+        "isFlagged": { "type": "boolean" },
+        "flagReason": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["teamId", "opponentTeamId", "matchNumber", "win", "mvpUid", "playerKds", "date"]
+    },
+    "BannedUid": {
+      "title": "BannedUid",
+      "description": "List of banned player UIDs in MGB system",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "reason": { "type": "string" },
+        "bannedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid"]
     }
   },
   "firestore": {
@@ -290,6 +364,22 @@
     "/settings/{settingId}": {
       "schema": "AppSetting",
       "description": "Global application configuration"
+    },
+    "/trainingTeams/{teamRefId}": {
+      "schema": "TrainingTeam",
+      "description": "Teams registered in training grounds"
+    },
+    "/trainingPlayers/{playerUid}": {
+      "schema": "TrainingPlayer",
+      "description": "Detailed player stats for training grounds"
+    },
+    "/trainingMatches/{matchRefId}": {
+      "schema": "TrainingMatch",
+      "description": "Submitted daily training matches"
+    },
+    "/bannedUids/{bannedUidRef}": {
+      "schema": "BannedUid",
+      "description": "Banned player UIDs database"
     }
   }
 }

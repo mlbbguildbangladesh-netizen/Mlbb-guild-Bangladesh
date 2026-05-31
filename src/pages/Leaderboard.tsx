@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Team } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Diamond, Zap, TrendingUp, Search, Filter, ArrowDownWideNarrow, ArrowUpNarrowWide, Sword, ChevronRight } from 'lucide-react';
@@ -20,6 +20,7 @@ function cn(...inputs: ClassValue[]) {
 
 const Leaderboard: React.FC = () => {
   const { isAdmin, settings } = useAuth();
+  const navigate = useNavigate();
   
   if (settings?.showLeaderboard === false && !isAdmin) {
     return <Navigate to="/" replace />;
@@ -195,18 +196,21 @@ const Leaderboard: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-6">
-                        <div className="flex items-center gap-4">
+                        <div 
+                          className="flex items-center gap-4 cursor-pointer group/name"
+                          onClick={() => navigate('/teams', { state: { showTeamId: team.id } })}
+                        >
                           {team.logoUrl ? (
-                            <ImageWithFallback src={team.logoUrl} alt={team.teamName} className="w-10 h-10 rounded-lg object-cover ring-2 ring-white/10 group-hover:ring-neon-blue transition-all" />
+                            <ImageWithFallback src={team.logoUrl} alt={team.teamName} className="w-10 h-10 rounded-lg object-cover ring-2 ring-white/10 group-hover/name:ring-[#00E5FF] transition-all" />
                           ) : (
-                            <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center font-black text-base text-gray-500">
+                            <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center font-black text-base text-gray-500 group-hover/name:bg-white/20 transition-all">
                               {team.teamName.charAt(0)}
                             </div>
                           )}
                           <div>
-                            <p className="font-bold text-lg leading-none">{team.teamName}</p>
+                            <p className="font-bold text-lg leading-none group-hover/name:text-[#00E5FF] transition-colors">{team.teamName}</p>
                             {isAdmin && (
-                              <p className="text-xs text-gray-500 mt-1 font-mono uppercase">ID: {team.uniqueId}</p>
+                              <p className="text-xs text-gray-500 mt-1 font-mono uppercase group-hover/name:text-[#00E5FF]/70 transition-colors">ID: {team.uniqueId}</p>
                             )}
                           </div>
                         </div>
@@ -272,18 +276,21 @@ const Leaderboard: React.FC = () => {
                       )}>
                         {index + 1}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div 
+                        className="flex items-center gap-2 cursor-pointer group/mobile"
+                        onClick={() => navigate('/teams', { state: { showTeamId: team.id } })}
+                      >
                         {team.logoUrl ? (
-                          <ImageWithFallback src={team.logoUrl} alt={team.teamName} className="w-8 h-8 rounded object-cover" />
+                          <ImageWithFallback src={team.logoUrl} alt={team.teamName} className="w-8 h-8 rounded object-cover ring-1 ring-transparent group-hover/mobile:ring-[#00E5FF] transition-all" />
                         ) : (
-                          <div className="w-8 h-8 rounded bg-white/10 flex items-center justify-center font-black text-xs text-gray-500">
+                          <div className="w-8 h-8 rounded bg-white/10 flex items-center justify-center font-black text-xs text-gray-500 group-hover/mobile:bg-white/20 transition-all">
                             {team.teamName.charAt(0)}
                           </div>
                         )}
                         <div>
-                          <p className="font-black text-xs leading-none uppercase">{team.teamName}</p>
+                          <p className="font-black text-xs leading-none uppercase group-hover/mobile:text-[#00E5FF] transition-colors">{team.teamName}</p>
                           {isAdmin && (
-                            <p className="text-[8px] text-gray-500 mt-0.5 font-mono">ID: {team.uniqueId}</p>
+                            <p className="text-[8px] text-gray-500 mt-0.5 font-mono group-hover/mobile:text-[#00E5FF]/70 transition-colors">ID: {team.uniqueId}</p>
                           )}
                         </div>
                       </div>

@@ -3,6 +3,7 @@ import { collection, doc, onSnapshot, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase';
 import { Table, Plus, Trash2, Check, X, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { showConfirmToast } from '../lib/toastUtils';
 import { GoogleSheetConfig, AppSetting } from '../types';
 
 const SheetsAdmin = () => {
@@ -62,7 +63,13 @@ const SheetsAdmin = () => {
   };
 
   const handleDeleteSheet = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this sheet link?')) return;
+    const confirm = await showConfirmToast({
+      title: "Delete Sheet Link",
+      message: "Are you sure you want to delete this sheet link?",
+      type: "danger",
+      confirmLabel: "Delete"
+    });
+    if (!confirm) return;
     const updatedSheets = sheets.filter(s => s.id !== id);
     setSheets(updatedSheets);
     await setDoc(doc(db, 'settings', 'global'), { googleSheets: updatedSheets }, { merge: true });

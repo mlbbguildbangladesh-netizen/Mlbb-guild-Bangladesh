@@ -221,7 +221,7 @@ service cloud.firestore {
     }
 
     match /soloPlayers/{playerId} {
-      allow read, list: if true;
+      allow read: if true;
       allow create: if isSignedIn() && (incoming().get('userId', '') == request.auth.uid || playerId == request.auth.uid);
       allow update: if isAdmin() || (isSignedIn() && (
         (existing().get('userId', '') == request.auth.uid || playerId == request.auth.uid) ||
@@ -251,6 +251,30 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow read, list: if true;
       allow write: if isStaff('settings');
+    }
+
+    match /trainingTeams/{teamId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() || isAdmin();
+    }
+
+    match /trainingPlayers/{playerId} {
+      allow read: if true;
+      allow create, update: if isSignedIn() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /trainingMatches/{matchId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /bannedUids/{bannedUid} {
+      allow read: if true;
+      allow write: if isAdmin() || isStaff('users');
     }
   }
 }

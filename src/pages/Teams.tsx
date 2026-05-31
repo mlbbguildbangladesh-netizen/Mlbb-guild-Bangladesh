@@ -1,24 +1,62 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Team } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Users, Diamond, Trophy, ChevronRight, X, Edit2, BarChart3, TrendingUp, Zap, Target, Star } from 'lucide-react';
+import { Shield, Users, Diamond, Trophy, ChevronRight, X, Edit2, BarChart3, TrendingUp, Zap, Target, Star, Flame } from 'lucide-react';
 import { TeamCard } from '../components/TeamCard';
 import { useAuth } from '../context/AuthContext';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FALLBACK_IMAGE } from '../lib/utils';
 import { ImageWithFallback } from '../components/ImageWithFallback';
 import { ScheduleMatch } from '../types';
 import { ListSkeleton } from '../components/LoadingComponents';
+import toast from 'react-hot-toast';
 
 const Teams: React.FC = () => {
-  const { isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [teams, setTeams] = useState<Team[]>([]);
   const [matches, setMatches] = useState<ScheduleMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [showStatsForTeam, setShowStatsForTeam] = useState<Team | null>(null);
+
+  useEffect(() => {
+    if (teams.length > 0 && location.state?.showTeamId && !showStatsForTeam) {
+      const team = teams.find(t => t.id === location.state.showTeamId);
+      if (team) {
+        setShowStatsForTeam(team);
+        // Clear state so it doesn't reopen if closed
+        const currentLocation = location.pathname;
+        navigate(currentLocation, { replace: true, state: {} });
+      }
+    }
+  }, [teams, location.state, showStatsForTeam]);
+
+  const handleRateTeam = async (team: Team, rating: number) => {
+    if (!user) {
+      toast.error("Please sign in to rate teams.");
+      return;
+    }
+    try {
+      const teamRef = doc(db, 'teams', team.id);
+      if (team.publicRatings) {
+        await updateDoc(teamRef, {
+          [`publicRatings.${user.id}`]: rating
+        });
+      } else {
+        await updateDoc(teamRef, {
+          publicRatings: { [user.id]: rating }
+        });
+      }
+      toast.success(`You rated ${team.teamName} ${rating} stars!`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to submit rating.");
+    }
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 500);
@@ -112,7 +150,7 @@ const Teams: React.FC = () => {
               initial={{ scale: 0.9, opacity: 0, y: 30 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 30 }}
-              className="relative w-full max-w-2xl bg-neutral-900 border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl p-8 sm:p-12"
+              className="relative w-full max-w-2xl bg-neutral-900 border border-white/10 rounded-[2.5rem] shadow-2xl p-8 sm:p-12 max-h-[90vh] overflow-y-auto overflow-x-hidden custom-scrollbar"
               onClick={e => e.stopPropagation()}
             >
               <button 
@@ -129,20 +167,55 @@ const Teams: React.FC = () => {
                     className="w-full h-full object-cover rounded-2xl" 
                   />
                 </div>
-                <div className="text-center sm:text-left">
+                <div className="text-center sm:text-left flex-1">
                   <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white">
                     {showStatsForTeam.teamName} <span className="text-neon-blue italic">ANALYTICS</span>
                   </h2>
-                  <div className="flex items-center justify-center sm:justify-start gap-4 mt-2">
-                    <span className="flex items-center gap-1.5 text-xs font-black text-gray-500 uppercase tracking-widest">
-                      <Star size={12} className="text-neon-cyan" />
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-3">
+                    <span className="flex items-center gap-1.5 text-xs font-black text-gray-500 uppercase tracking-widest px-2 py-1 bg-white/5 border border-white/10 rounded">
+                      <Zap size={12} className="text-neon-cyan" />
                       Season Tier: {showStatsForTeam.points > 1000 ? 'Elite' : 'Gold'}
                     </span>
-                    <span className="flex items-center gap-1.5 text-xs font-black text-gray-500 uppercase tracking-widest border-l border-white/10 pl-4">
-                      <TrendingUp size={12} className="text-neon-blue" />
-                      Streak: {showStatsForTeam.streak || 0}
+                    <span className="flex items-center gap-1.5 text-xs font-black text-gray-500 uppercase tracking-widest px-2 py-1 bg-white/5 border border-white/10 rounded">
+                      <Flame size={12} className="text-red-500" />
+                      Win Streak: {showStatsForTeam.streak || 0}
                     </span>
                   </div>
+
+                  {(() => {
+                    const ratingsValues = Object.values(showStatsForTeam.publicRatings || {});
+                    const averageRating = ratingsValues.length 
+                      ? (ratingsValues.reduce((a, b: any) => a + Number(b), 0) / ratingsValues.length).toFixed(1) 
+                      : '0.0';
+                    const totalRatingCount = ratingsValues.length;
+                    const userRating = user ? showStatsForTeam.publicRatings?.[user.id] : 0;
+                    return (
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-3 inline-flex flex-col gap-2 mt-4 mx-auto sm:mx-0">
+                        <div className="flex items-center gap-3">
+                           <div className="flex gap-1">
+                             {[1, 2, 3, 4, 5].map((star) => (
+                               <Star
+                                 key={star}
+                                 size={16}
+                                 onClick={() => handleRateTeam(showStatsForTeam, star)}
+                                 className={`cursor-pointer transition-colors ${
+                                   (userRating && star <= userRating)
+                                     ? 'text-yellow-400 fill-yellow-400' 
+                                     : star <= Number(averageRating) 
+                                       ? 'text-yellow-500/50 fill-yellow-500/50' 
+                                       : 'text-gray-600'
+                                 } hover:text-yellow-400`}
+                               />
+                             ))}
+                           </div>
+                           <span className="text-xl font-black text-white">{averageRating}</span>
+                        </div>
+                        <span className="text-[9px] font-mono text-gray-400 uppercase">
+                          {totalRatingCount} PUBLIC RATINGS {userRating ? `(YOU RATED ${userRating})` : ''}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -223,9 +296,25 @@ const Teams: React.FC = () => {
                 <div className="relative shrink-0">
                   <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl bg-black border border-white/10 group-hover:border-neon-blue transition-all overflow-hidden p-1">
                     {team.logoUrl ? (
-                      <ImageWithFallback src={team.logoUrl} alt={team.teamName} className="w-full h-full object-cover rounded-lg" />
+                      <div 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowStatsForTeam(team);
+                        }}
+                        className="w-full h-full cursor-pointer hover:opacity-80 transition-opacity"
+                        title="View Team Profile & Details"
+                      >
+                        <ImageWithFallback src={team.logoUrl} alt={team.teamName} className="w-full h-full object-cover rounded-lg" />
+                      </div>
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xl font-black text-white/10 uppercase">
+                      <div 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowStatsForTeam(team);
+                        }}
+                        className="w-full h-full flex items-center justify-center text-xl font-black text-white/10 uppercase cursor-pointer hover:bg-white/5 transition-colors"
+                        title="View Team Profile & Details"
+                      >
                         {team.teamName.charAt(0)}
                       </div>
                     )}
