@@ -1000,6 +1000,21 @@ const Challenges: React.FC = () => {
                     {activeChallenges.filter(c => (c.targetTeamIds || []).includes(currentTeam.id)).map(c => {
                       const fromTeam = teams.find(t => t.id === c.fromTeamId);
                       const details = c.challengeDetails?.[currentTeam.id];
+                      
+                      let isExpired = false;
+                      if (details?.date && details?.time) {
+                        try {
+                          const matchDateTime = new Date(`${details.date}T${details.time}:00`);
+                          const now = new Date();
+                          const hoursDifference = (matchDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+                          if (hoursDifference < 24) {
+                            isExpired = true;
+                          }
+                        } catch(e) {
+                          // Ignore parsing errors
+                        }
+                      }
+
                       return (
                         <div key={c.id} className="glass-card p-6 space-y-4 gaming-border-red border-l-4">
                           <div className="flex items-center gap-3">
@@ -1036,17 +1051,17 @@ const Challenges: React.FC = () => {
 
                           <div className="grid grid-cols-2 gap-3">
                             <button 
-                              disabled={!isLeader}
+                              disabled={!isLeader || isExpired}
                               onClick={() => setAcceptModalData({ c, fromTeam })}
-                              className={`w-full py-3 ${isLeader ? 'bg-neon-green text-black' : 'bg-white/5 text-gray-500'} font-black text-[10px] uppercase tracking-widest rounded-lg hover:brightness-110 shadow-[0_0_20px_rgba(0,255,102,0.3)] transition-all flex items-center justify-center gap-2`}
+                              className={`w-full py-3 ${(isLeader && !isExpired) ? 'bg-neon-green text-black hover:brightness-110 shadow-[0_0_20px_rgba(0,255,102,0.3)]' : 'bg-white/5 text-gray-500'} font-black text-[10px] uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-2`}
                             >
                               <CheckCircle2 size={14} />
-                              {isLeader ? 'ACCEPT CHALLENGE' : 'LEADER ONLY'}
+                              {isExpired ? 'EXPIRED' : (isLeader ? 'ACCEPT CHALLENGE' : 'LEADER ONLY')}
                             </button>
                             <button 
                               disabled={!isLeader}
                               onClick={() => handleReject(c)}
-                              className={`w-full py-3 ${isLeader ? 'bg-neon-red/10 border border-neon-red/20 text-neon-red' : 'bg-white/5 text-gray-500'} font-black text-[10px] uppercase tracking-widest rounded-lg hover:bg-neon-red/20 transition-all flex items-center justify-center gap-2`}
+                              className={`w-full py-3 ${isLeader ? 'bg-neon-red/10 border border-neon-red/20 text-neon-red hover:bg-neon-red/20' : 'bg-white/5 text-gray-500'} font-black text-[10px] uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-2`}
                             >
                               <X size={14} />
                               {isLeader ? 'DECLINE (-10 PTS)' : '...'}

@@ -47,12 +47,13 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { showConfirmToast } from '../lib/toastUtils';
+import { Navigate } from 'react-router-dom';
 import { TrainingTeam, TrainingPlayer, TrainingMatch, BannedUid, SoloPlayer } from '../types';
 
 const ROLES = ['Tank', 'Fighter', 'Assassin', 'Mage', 'Marksman', 'Support'];
 
 export default function TrainingGround() {
-  const { user, isAdmin, isModerator } = useAuth();
+  const { user, isAdmin, isModerator, settings } = useAuth();
   
   // States
   const [activeTab, setActiveTab] = useState<'hub' | 'leaderboard' | 'register' | 'submit' | 'history' | 'admin'>('hub');
@@ -95,6 +96,10 @@ export default function TrainingGround() {
   const [soloPlayersList, setSoloPlayersList] = useState<SoloPlayer[]>([]);
 
   // Real-time synchronization
+  if (settings?.showTrainingGround === false && !isAdmin && !isModerator) {
+    return <Navigate to="/" replace />;
+  }
+
   useEffect(() => {
     setLoading(true);
     const unsubTeams = onSnapshot(collection(db, 'trainingTeams'), (snap) => {

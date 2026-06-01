@@ -545,6 +545,7 @@ const Admin: React.FC = () => {
       'showDiamonds',
       'showSoloPlayers',
       'allowSoloRegistration',
+      'showTrainingGround',
       'allowOldTeamRegistration',
       'profileEditsEnabled'
     ];
@@ -3752,6 +3753,24 @@ Supports multiple lines."
                     >
                       {settings?.showChallenges !== false ? <Eye size={12} /> : <X size={12} />}
                       {settings?.showChallenges !== false ? 'VISIBLE' : 'HIDDEN'}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-black uppercase tracking-tight">Training Ground Link</p>
+                      <p className="text-[8px] text-gray-500 font-bold uppercase">Navbar link for training</p>
+                    </div>
+                    <button 
+                      onClick={() => toggleSetting('showTrainingGround')}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[9px] transition-all ${
+                        settings?.showTrainingGround !== false
+                        ? 'bg-neon-green/20 text-neon-green border border-neon-green/50' 
+                        : 'bg-neon-red/20 text-neon-red border border-neon-red/50'
+                      }`}
+                    >
+                      {settings?.showTrainingGround !== false ? <Eye size={12} /> : <X size={12} />}
+                      {settings?.showTrainingGround !== false ? 'VISIBLE' : 'HIDDEN'}
                     </button>
                   </div>
 

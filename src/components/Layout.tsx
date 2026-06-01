@@ -48,7 +48,9 @@ const Navbar: React.FC = () => {
     navItems.push({ name: 'Solo Players', path: '/solo-players', icon: Shield });
   }
 
-  navItems.push({ name: 'Training Ground', path: '/training', icon: Flame });
+  if (settings?.showTrainingGround !== false) {
+    navItems.push({ name: 'Training Ground', path: '/training', icon: Flame });
+  }
 
   if (settings?.showShop !== false) {
     navItems.push({ name: 'Shop', path: '/shop', icon: ShoppingCart });
@@ -66,7 +68,7 @@ const Navbar: React.FC = () => {
 
   return (
     <nav className="fixed top-0 left-0 w-full z-50 bg-black/60 backdrop-blur-lg border-b border-white/10">
-      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 min-h-[4rem] py-2 flex flex-wrap items-center justify-between gap-y-2">
         <div className="flex items-center gap-4">
           <NavLink to="/" className="flex items-center gap-2 group">
             <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center neon-glow-blue border border-white/10 gaming-gradient-blue transition-transform group-hover:scale-110">
@@ -79,31 +81,33 @@ const Navbar: React.FC = () => {
         </div>
 
         {/* Desktop Nav */}
-        <div className="hidden md:flex items-center gap-6">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                `group relative flex items-center gap-2 text-[11px] font-black uppercase tracking-widest transition-all hover:text-neon-blue ${
-                  isActive ? 'text-neon-blue' : 'text-gray-400'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <item.icon size={16} className="group-hover:scale-110 transition-transform" />
-                  <span>{item.name}</span>
-                  <div className={`absolute -bottom-1 left-0 h-[1px] bg-neon-blue transition-all shadow-[0_0_10px_#00E5FF] ${
-                    isActive ? 'w-full' : 'w-0 group-hover:w-full'
-                  }`} />
-                </>
-              )}
-            </NavLink>
-          ))}
+        <div className="hidden md:flex flex-wrap items-center justify-end gap-x-2 lg:gap-x-4 gap-y-3 flex-1 ml-4">
+          <div className="flex flex-wrap items-center justify-end gap-x-3 lg:gap-x-5 gap-y-2">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) =>
+                  `group relative flex items-center gap-1.5 text-[10px] lg:text-[11px] font-black uppercase tracking-widest transition-all hover:text-neon-blue ${
+                    isActive ? 'text-neon-blue' : 'text-gray-400'
+                  }`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <item.icon size={14} className="group-hover:scale-110 transition-transform lg:w-4 lg:h-4" />
+                    <span>{item.name}</span>
+                    <div className={`absolute -bottom-1 left-0 h-[1px] bg-neon-blue transition-all shadow-[0_0_10px_#00E5FF] ${
+                      isActive ? 'w-full' : 'w-0 group-hover:w-full'
+                    }`} />
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </div>
           
           {user ? (
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 pl-2 lg:pl-4 md:border-l border-white/10">
               {settings?.showDiamonds !== false && (
                 <div className="hidden lg:flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
                   <Diamond size={14} className="text-neon-cyan" />
@@ -113,11 +117,11 @@ const Navbar: React.FC = () => {
                 </div>
               )}
               <NotificationBell />
-              <NavLink to="/profile" className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10 hover:border-neon-blue transition-colors group">
-                <div className="w-6 h-6 rounded-full bg-neon-blue/20 flex items-center justify-center group-hover:bg-neon-blue/40 transition-colors">
-                  <UserIcon size={14} className="text-neon-blue" />
+              <NavLink to="/profile" className="flex items-center gap-2 bg-white/5 px-2.5 py-1.5 lg:px-3 lg:py-1.5 rounded-full border border-white/10 hover:border-neon-blue transition-colors group">
+                <div className="w-5 h-5 lg:w-6 lg:h-6 rounded-full bg-neon-blue/20 flex items-center justify-center group-hover:bg-neon-blue/40 transition-colors">
+                  <UserIcon size={12} className="text-neon-blue lg:w-3.5 lg:h-3.5" />
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-widest group-hover:text-neon-blue transition-colors">
+                <span className="text-[9px] lg:text-[10px] font-black uppercase tracking-widest group-hover:text-neon-blue transition-colors">
                   {(isAdmin || isModerator) ? 'STAFF PANEL' : (user.teamName || user.displayName || 'PROFILE')}
                 </span>
               </NavLink>
@@ -126,16 +130,18 @@ const Navbar: React.FC = () => {
                 className="text-gray-400 hover:text-neon-red transition-colors"
                 title="Logout"
               >
-                <LogOut size={20} />
+                <LogOut size={18} className="lg:w-5 lg:h-5" />
               </button>
             </div>
           ) : (
-            <NavLink 
-              to="/login"
-              className="px-5 py-2 rounded-lg bg-neon-blue text-black font-bold text-sm neon-glow-blue hover:brightness-110 transition-all"
-            >
-              LOGIN
-            </NavLink>
+            <div className="pl-2 lg:pl-4 md:border-l border-white/10">
+              <NavLink 
+                to="/login"
+                className="px-4 py-1.5 lg:px-5 lg:py-2 rounded-lg bg-neon-blue text-black font-bold text-[11px] lg:text-sm neon-glow-blue hover:brightness-110 transition-all whitespace-nowrap"
+              >
+                LOGIN
+              </NavLink>
+            </div>
           )}
         </div>
 
@@ -286,7 +292,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const isMaintenance = settings?.maintenanceMode && !isAdmin && !isModerator && location.pathname !== '/login';
 
   return (
-    <div className="min-h-screen pt-20 pb-10 relative overflow-x-hidden">
+    <div className="min-h-screen pt-24 pb-10 relative overflow-x-hidden">
       <div className="scanline-overlay" />
       <Navbar />
       

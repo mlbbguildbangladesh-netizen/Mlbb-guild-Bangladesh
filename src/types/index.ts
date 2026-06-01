@@ -243,6 +243,7 @@ export interface AppSetting {
   showDiamonds?: boolean;
   showSoloPlayers?: boolean;
   allowSoloRegistration?: boolean;
+  showTrainingGround?: boolean;
   communityRules?: string;
   heroAnnouncement?: string;
   heroTitle?: string;
