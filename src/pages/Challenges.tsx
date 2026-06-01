@@ -49,7 +49,7 @@ import {
 import { db, auth } from '../lib/firebase';
 import { Team, Challenge, AppSetting, ChallengeDetails, ScheduleMatch, Transaction, MATCH_SLOTS } from '../types';
 import CountdownTimer from '../components/CountdownTimer';
-import { FALLBACK_IMAGE } from '../lib/utils';
+import { FALLBACK_IMAGE, formatRelativeTime } from '../lib/utils';
 import { ImageWithFallback } from '../components/ImageWithFallback';
 import { createNotification } from '../lib/notificationUtils';
 
@@ -974,6 +974,11 @@ const Challenges: React.FC = () => {
                             
                               <div className="flex items-center gap-3">
                                 <div className="text-right hidden sm:block">
+                                  {userChallenge.timestamp && (
+                                    <p className="text-[10px] text-gray-400 font-bold mb-1">
+                                      Declared: {formatRelativeTime(userChallenge.timestamp)}
+                                    </p>
+                                  )}
                                   <p className="text-[10px] font-black text-neon-green uppercase">Awaiting Response</p>
                                   <p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">{isLeader ? 'Pending acceptance' : 'Leader managing'}</p>
                                 </div>
@@ -1017,11 +1022,18 @@ const Challenges: React.FC = () => {
 
                       return (
                         <div key={c.id} className="glass-card p-6 space-y-4 gaming-border-red border-l-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-black flex items-center justify-center overflow-hidden border border-white/10 shrink-0 shadow-md">
-                              {fromTeam?.logoUrl ? <ImageWithFallback src={fromTeam.logoUrl} className="w-full h-full object-cover" /> : <Users size={16} className="text-gray-700" />}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-black flex items-center justify-center overflow-hidden border border-white/10 shrink-0 shadow-md">
+                                {fromTeam?.logoUrl ? <ImageWithFallback src={fromTeam.logoUrl} className="w-full h-full object-cover" /> : <Users size={16} className="text-gray-700" />}
+                              </div>
+                              <span className="font-black text-sm uppercase tracking-tight">{fromTeam?.teamName}</span>
                             </div>
-                            <span className="font-black text-sm uppercase tracking-tight">{fromTeam?.teamName}</span>
+                            {c.timestamp && (
+                              <div className="text-[10px] text-gray-400 font-bold hidden sm:block">
+                                Received: {formatRelativeTime(c.timestamp)}
+                              </div>
+                            )}
                           </div>
                           
                           <div className="p-4 bg-black/40 rounded-xl space-y-3">

@@ -16,6 +16,7 @@ import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Notification } from '../types';
 import { Link } from 'react-router-dom';
+import { formatRelativeTime } from '../lib/utils';
 
 export function NotificationBell() {
   const { user } = useAuth();
@@ -129,9 +130,16 @@ export function NotificationBell() {
                   >
                     <div className="flex justify-between items-start gap-3">
                       <div className="space-y-1 flex-grow cursor-pointer" onClick={() => markAsRead(n.id)}>
-                        <h4 className={`text-[11px] font-black uppercase tracking-wide ${!n.read ? 'text-neon-blue' : 'text-gray-300'}`}>
-                          {n.title}
-                        </h4>
+                        <div className="flex justify-between items-center">
+                          <h4 className={`text-[11px] font-black uppercase tracking-wide ${!n.read ? 'text-neon-blue' : 'text-gray-300'}`}>
+                            {n.title}
+                          </h4>
+                          {n.createdAt && (
+                            <span className="text-[9px] text-gray-500 font-bold ml-2 whitespace-nowrap">
+                              {formatRelativeTime(n.createdAt)}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[10px] text-gray-500 leading-relaxed font-bold">
                           {n.message}
                         </p>

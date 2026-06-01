@@ -108,15 +108,18 @@ export const recordMatchResult = async (
   const teamBData = teamBSnap.data() as Team;
 
   const batch = writeBatch(db);
+  const timestamp = serverTimestamp();
 
   // Update schedule status if provided
   if (scheduleId) {
     const scheduleRef = doc(db, 'schedules', scheduleId);
-    batch.update(scheduleRef, { status: 'completed' });
+    batch.update(scheduleRef, { 
+      status: 'completed',
+      completedAt: timestamp
+    });
   }
 
   const matchRef = doc(collection(db, 'matches'));
-  const timestamp = serverTimestamp();
 
   let pointsA = manualPoints?.teamA ?? 0;
   let diamondsA = manualDiamonds?.teamA ?? 0;
@@ -273,8 +276,45 @@ export const recordMatchResult = async (
   };
 };
 
+export const formatRelativeTime = (timestamp: any): string => {
+  if (!timestamp) return '';
+  let date: Date;
+  
+  if (timestamp?.toDate) {
+    date = timestamp.toDate();
+  } else {
+    date = new Date(timestamp);
+  }
+  
+  if (isNaN(date.getTime())) return '';
+
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) {
+    return 'Just now';
+  } else if (diffInSeconds < 3600) {
+    const minutes = Math.floor(diffInSeconds / 60);
+    return `${minutes}m ago`;
+  } else if (diffInSeconds < 86400) {
+    const hours = Math.floor(diffInSeconds / 3600);
+    return `${hours}h ago`;
+  } else if (diffInSeconds < 604800) {
+    const days = Math.floor(diffInSeconds / 86400);
+    return `${days}d ago`;
+  } else {
+    // Format full date if older than a week, like "Oct 23, 11:32 AM"
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    }).format(date);
+  }
+};
+
 export const formatLink = (url?: string) => {
-  if (!url) return '';
   let trimmed = url.trim();
   
   if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://') && 

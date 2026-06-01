@@ -28,6 +28,7 @@ import CountdownTimer from '../components/CountdownTimer';
 import { ImageWithFallback } from '../components/ImageWithFallback';
 import { MatchCardSkeleton } from '../components/LoadingComponents';
 import { Link } from 'react-router-dom';
+import { formatRelativeTime } from '../lib/utils';
 
 const Schedule: React.FC = () => {
   const { isAdmin, settings } = useAuth();
@@ -601,12 +602,17 @@ const Schedule: React.FC = () => {
                       <p className="text-[10px] font-black text-gray-400 uppercase italic">{match.matchType || 'official'}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="text-right hidden xl:block mr-4">
-                        <p className="text-[8px] font-black text-neon-blue uppercase tracking-widest opacity-50">SCHEDULED AT</p>
-                        <p className="text-[10px] font-black text-gray-400 uppercase italic">
-                          {match.createdAt ? ((match.createdAt as any).toMillis ? new Date((match.createdAt as any).toMillis()).toLocaleString() : new Date(match.createdAt).toLocaleString()) : 'TBD'}
-                        </p>
-                      </div>
+                        <div className="text-right hidden xl:block mr-4 text-center">
+                          <p className="text-[8px] font-black text-neon-blue uppercase tracking-widest opacity-50">
+                            {match.status === 'completed' ? 'DECIDED AT' : 'SCHEDULED AT'}
+                          </p>
+                          <p className="text-[10px] font-black text-gray-400 uppercase italic">
+                            {match.status === 'completed' && match.completedAt 
+                              ? formatRelativeTime(match.completedAt)
+                              : match.createdAt ? formatRelativeTime(match.createdAt) : 'TBD'
+                            }
+                          </p>
+                        </div>
                       {isAdmin && (
                         <button
                           onClick={(e) => handleDeleteMatch(match.id, e)}

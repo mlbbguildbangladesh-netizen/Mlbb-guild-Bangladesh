@@ -135,6 +135,8 @@ export interface ScheduleMatch {
   matchType?: 'official' | 'challenge' | 'seasonal';
   bet?: number;
   streamUrl?: string;
+  createdAt?: any;
+  completedAt?: any;
   matchDetails?: {
     winnerId: string;
     resultType: MatchResultType;
@@ -142,7 +144,6 @@ export interface ScheduleMatch {
     diamondsExchanged?: { team1: number, team2: number };
     externalLink?: string;
   };
-  createdAt?: any;
 }
 
 export interface Season {
